@@ -1,0 +1,51 @@
+{
+  "name": "playq-automation-framework",
+  "version": "1.0.0",
+  "description": "End-to-end automation framework integrating Playwright and Cucumber for robust testing.",
+  "main": "index.js",
+  "scripts": {
+    "test": "cross-env npx ts-node -r tsconfig-paths/register src/exec/runner.ts",
+    "pretest": "npx ts-node -r tsconfig-paths/register src/scripts/pretest.ts",
+    "posttest": "npx ts-node -r tsconfig-paths/register src/scripts/posttest.ts",
+    "posttest:playwright": "npx ts-node -r tsconfig-paths/register src/scripts/posttest.ts",
+    "posttest:cucumber": "npx ts-node -r tsconfig-paths/register src/scripts/posttest.ts",
+    "test:failed": "cucumber-js -p rerun @rerun.txt",
+    "report:allure": "rimraf ./allure-report && npx allure generate ./allure-results --output ./allure-report && npx allure open ./allure-report",
+    "report:allure:clean": "rimraf ./allure-report && rimraf ./allure-results",
+    "report:allure:singlefile": "rimraf ./allure-report && npx allure generate --single-file ./allure-results --output ./allure-report",
+    "playq:install": "npm install && npx playwright install",
+    "playq:getversions": "npx ts-node src/scripts/get-versions.ts",
+    "playq:util": "npx ts-node -r tsconfig-paths/register src/scripts/util.ts"
+  },
+  "keywords": [
+    "cucumber",
+    "cucumber - TS",
+    "playwright-cucumber"
+  ],
+  "author": "NCS",
+  "license": "ISC",
+  "devDependencies": {
+    "@cucumber/cucumber": "^12.1.0",
+    "@e965/xlsx": "^0.20.3",
+    "@faker-js/faker": "^9.6.0",
+    "@playwright/test": "^1.53.1",
+    "@types/clipboardy": "^1.1.0",
+    "@types/qrcode": "^1.5.5",
+    "allure-playwright": "^3.3.0",
+    "axios": "^1.10.0",
+    "clipboardy": "^4.0.0",
+    "cross-env": "^7.0.3",
+    "csv-parser": "^3.2.0",
+    "dotenv": "^16.0.3",
+    "fs-extra": "^11.1.1",
+    "minimist": "^1.2.8",
+    "multiple-cucumber-html-reporter": "^3.3.0",
+    "otplib": "^12.0.1",
+    "qrcode": "^1.5.4",
+    "rimraf": "^6.0.1",
+    "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
+    "winston": "^3.8.2",
+    "yargs": "^18.0.0"
+  }
+}

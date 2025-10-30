@@ -1,0 +1,70 @@
+{
+    "compilerOptions": {
+        "baseUrl": "./",
+        "lib": [
+            "es2021",
+            "dom"
+        ],
+        "typeRoots": [
+            "./node_modules/@types",
+            "./src/helper/types"
+        ],
+        "resolveJsonModule": true,
+        "esModuleInterop": true,
+        "paths": {
+            "@src/*": [
+                "src/*"
+            ],
+            "@extend/*": [
+                "extend/*"
+            ],
+            "@helper/*": [
+                "src/helper/*"
+            ],
+            "@actions": [
+                "src/helper/actions/index.ts"
+            ],
+            "@config/*": [
+                "config/*"
+            ],
+             "@env/*": [
+                "environments/*"
+            ],
+            "@playwright-hook": [
+                "config/playwright/playwright.hooks.ts"
+            ],
+            "@setup/playwrightTest": [
+                "config/playwright/playwright.test.ts"
+            ],
+            // "@action/*": ["src/helper/actions/*"],
+            // "@action": ["src/helper/actions/index.ts"],
+            // "@addons": [
+            //     "src/helper/addons/index.ts"
+            // ],
+            "@resources/*": [
+                "resources/*"
+            ],
+            "@global": [
+                "src/global"
+            ],
+            "@playq": [
+                "src/global"
+            ],
+             "@extend": [
+                "extend"
+            ],
+        },
+        "module": "CommonJS",
+        "target": "es2017", // or at least es2015
+        "downlevelIteration": true // enables use of iterators like matchAll
+    },
+    "include": [
+        "src",
+        "test",
+        "playwright-tests",
+        "config",
+        "resources",
+        "extend",
+        "resources/locators/loc-ts"
+    ]
+}
