@@ -16,24 +16,18 @@
  * Note: This file adheres to the PlayQ Enterprise Automation Standards.
  */
 
-import { vars, webLocResolver, webFixture, logFixture } from "@src/global";
+import { vars, webLocResolver, webFixture, logFixture,config } from "@playq";
 import {
   Page,
   Locator,
   expect,
   test as playwrightTest,
 } from "@playwright/test";
-import { warn } from "winston";
 import { isCucumberRunner, isPlaywrightRunner } from "@config/runner";
 import * as allure from "allure-js-commons";
 import { waitInMilliSeconds } from "./commActions";
 import { parseLooseJson } from '../bundle/vars';
-const isSmartAIEnabled =
-  String(vars.getConfigValue("smartAI.enable")).toLowerCase().trim() === "true";
-const isPatternEnabled =
-  String(vars.getConfigValue("patternIQ.enable")).toLowerCase().trim() ===
-  "true";
-
+import path from "path";
 /**
  * Waits for the page to fully load by checking multiple browser states:
  * - `domcontentloaded`: Ensures DOM is parsed and ready.
@@ -92,11 +86,138 @@ export async function waitForPageToLoad(
  * @throws Error if the locator does not become enabled within the timeout.
  *
  */
-async function waitForEnabled(
+export async function waitForEnabled(
   locator: Locator,
   actionTimeout: number = 5000
 ): Promise<void> {
   await expect(locator).toBeEnabled({ timeout: actionTimeout });
+}
+
+//waitForDisaaper|Disabled
+/**
+ * Web: Wait for displayed -field: {param} -options: {param}
+ *
+ * Waits for an element to become visible on the page.
+ *
+ * @param page - Playwright Page instance
+ * @param field - The label, id, name, or selector of the element to wait for
+ * @param options - Optional JSON string or object:
+ *   - actionTimeout: [number] Optional timeout in milliseconds. Default: Configured timeout.
+ *   - pattern: [string] Optional pattern to refine element search.
+ *   - fieldType: [string] Type of field (e.g., input, button, etc.)
+ *   - screenshot: [boolean] Capture screenshot after waiting. Default: false.
+ *   - screenshotText: [string] Description for screenshot.
+ *   - screenshotFullPage: [boolean] Full page screenshot. Default: true.
+ */
+export async function waitForDisplayed(
+  page: Page,
+  field: string | Locator,
+  options?: string | Record<string, any>
+) {
+  const options_json = typeof options === "string" ? parseLooseJson(options) : options || {};
+  const {
+    actionTimeout = config?.testExecution?.actionTimeout || Number(vars.getConfigValue("testExecution.actionTimeout")) || 30000,
+    pattern,
+    fieldType,
+    screenshot = false,
+    screenshotText = "",
+    screenshotFullPage = true
+  } = options_json;
+
+  if (isPlaywrightRunner()) {
+    await allure.step(
+      `Web: Wait for displayed -field: ${field} -options: ${JSON.stringify(options_json)}`,
+      async () => {
+        await doWaitForDisplayed();
+      }
+    );
+  } else {
+    await doWaitForDisplayed();
+  }
+
+  async function doWaitForDisplayed() {
+    if (!page) throw new Error("Page not initialized");
+    const target = typeof field === "string" 
+      ? await webLocResolver(fieldType, field, page, pattern, actionTimeout)
+      : field;
+
+    try {
+      await expect(target).toBeVisible({ timeout: actionTimeout });
+      await attachLog(`✅ Element "${field}" is now visible`, "text/plain");
+    } catch (error) {
+      throw new Error(`❌ Element "${field}" did not become visible within ${actionTimeout}ms`);
+    }
+
+    await processScreenshot(
+      page,
+      screenshot,
+      screenshotText || `Waited for element to be displayed: ${field}`,
+      screenshotFullPage
+    );
+  }
+}
+
+/**
+ * Web: Wait for disappear -field: {param} -options: {param}
+ *
+ * Waits for an element to disappear (become hidden or removed) from the page.
+ *
+ * @param page - Playwright Page instance
+ * @param field - The label, id, name, or selector of the element to wait for
+ * @param options - Optional JSON string or object:
+ *   - actionTimeout: [number] Optional timeout in milliseconds. Default: Configured timeout.
+ *   - pattern: [string] Optional pattern to refine element search.
+ *   - fieldType: [string] Type of field (e.g., input, button, etc.)
+ *   - screenshot: [boolean] Capture screenshot after waiting. Default: false.
+ *   - screenshotText: [string] Description for screenshot.
+ *   - screenshotFullPage: [boolean] Full page screenshot. Default: true.
+ */
+export async function waitForDisappear(
+  page: Page,
+  field: string | Locator,
+  options?: string | Record<string, any>
+) {
+  const options_json = typeof options === "string" ? parseLooseJson(options) : options || {};
+  const {
+    actionTimeout = config?.testExecution?.actionTimeout || Number(vars.getConfigValue("testExecution.actionTimeout")) || 30000,
+    pattern,
+    fieldType,
+    screenshot = false,
+    screenshotText = "",
+    screenshotFullPage = true
+  } = options_json;
+
+  if (isPlaywrightRunner()) {
+    await allure.step(
+      `Web: Wait for disappear -field: ${field} -options: ${JSON.stringify(options_json)}`,
+      async () => {
+        await doWaitForDisappear();
+      }
+    );
+  } else {
+    await doWaitForDisappear();
+  }
+
+  async function doWaitForDisappear() {
+    if (!page) throw new Error("Page not initialized");
+    const target = typeof field === "string"
+      ? await webLocResolver(fieldType, field, page, pattern, actionTimeout)
+      : field;
+
+    try {
+      await expect(target).toBeHidden({ timeout: actionTimeout });
+      await attachLog(`✅ Element "${field}" has disappeared`, "text/plain");
+    } catch (error) {
+      throw new Error(`❌ Element "${field}" did not disappear within ${actionTimeout}ms`);
+    }
+
+    await processScreenshot(
+      page,
+      screenshot,
+      screenshotText || `Waited for element to disappear: ${field}`,
+      screenshotFullPage
+    );
+  }
 }
 
 /**
@@ -127,11 +248,9 @@ export async function waitForTextAtLocation(
   const options_json =
     typeof options === "string" ? parseLooseJson(options) : options || {};
   const {
-    actionTimeout = Number(
-      vars.getConfigValue("testExecution.actionTimeout")
-    ) || 10000,
+    actionTimeout = config?.testExecution?.actionTimeout || Number(vars.getConfigValue("testExecution.actionTimeout")) || 10000,
     partialMatch = false,
-    ignoreCase = true,
+    ignoreCase = false,
     screenshot = false,
     screenshotText = "",
     screenshotFullPage = true,
@@ -168,7 +287,7 @@ export async function waitForTextAtLocation(
       lastActual = actualText;
       let expected = expectedText;
       let actual = actualText;
-      if (!ignoreCase) {
+      if (ignoreCase) {
         expected = expected.toLowerCase();
         actual = actual.toLowerCase();
       }
@@ -235,11 +354,9 @@ export async function waitForHeader(
     typeof options === "string" ? parseLooseJson(options) : options || {};
   
   const {
-    actionTimeout = Number(
-      vars.getConfigValue("testExecution.actionTimeout")
-    ) || 30000,
+    actionTimeout = config?.testExecution?.actionTimeout || Number(vars.getConfigValue("testExecution.actionTimeout")) || 30000,
     partialMatch = false,
-    ignoreCase = true,
+    ignoreCase = false,
     pattern,
     screenshot = false,
     screenshotText = "",
@@ -414,7 +531,7 @@ export async function openBrowser(
 
   async function doOpenBrowser() {
     if (!page) throw new Error("Page not initialised");
-    await page.goto(resolvedUrl, { waitUntil: "domcontentloaded",timeout:10000});
+    await page.goto(resolvedUrl, { waitUntil: "domcontentloaded" });
     await processScreenshot(
       page,
       screenshot,
@@ -512,9 +629,7 @@ export async function fill(
   if (!page) throw new Error("Page not initialized");
   const {
     iframe = "",
-    actionTimeout = Number(
-      vars.getConfigValue("testExecution.actionTimeout")
-    ) || 30000, // Default timeout
+    actionTimeout = config?.testExecution?.actionTimeout || Number(vars.getConfigValue("testExecution.actionTimeout")) || 30000, // Default timeout 
     pattern,
     screenshot = false,
     screenshotText = "",
@@ -586,6 +701,7 @@ export const enter = fill;
  *
  * @param field - The label, text, id, name, or selector of the button to click (e.g., "Submit", "Save", "Cancel").
  * @param options - Optional JSON string or object:
+ *  - iframe: [string] Optional iframe selector if the button is inside an iframe. Default: "".
  *   - actionTimeout: [number] Optional timeout in milliseconds for waiting. Default: Configured testExecution > actionTimeout or 10000 milliseconds.
  *   - pattern: [string] Optional pattern to refine element search. Default: Configured pattern.
  *   - screenshot: [boolean] Capture a screenshot after clicking the button. Default: false.
@@ -604,7 +720,8 @@ export async function clickButton(
   const options_json =
     typeof options === "string" ? parseLooseJson(options) : options || {};
   const {
-    actionTimeout = Number(
+    iframe = "",
+    actionTimeout = config?.testExecution?.actionTimeout || Number(
       vars.getConfigValue("testExecution.actionTimeout") || 10000
     ),
     pattern,
@@ -632,13 +749,13 @@ export async function clickButton(
     const target =
       typeof field === "string"
         ? await webLocResolver(
-            "button",
-            field,
-            page,
-            pattern,
-            actionTimeout,
-            "after"
-          )
+          "button",
+          field,
+          page,
+          pattern,
+          actionTimeout,
+          "after"
+        )
         : field;
     await processScreenshot(
       page,
@@ -646,7 +763,20 @@ export async function clickButton(
       screenshotText,
       screenshotFullPage
     );
-    await target.click();
+
+    if (iframe) {
+      await waitForEnabled(
+        page.frameLocator(iframe).locator(target),
+        actionTimeout
+      );
+      await page
+        .frameLocator(iframe)
+        .locator(target)
+        .click({ timeout: actionTimeout });
+    } else {
+      await waitForEnabled(target, actionTimeout);
+      await target.click({ timeout: actionTimeout });
+    }
     await page.waitForLoadState("load");
 
     await processScreenshot(
@@ -683,9 +813,7 @@ export async function clickLink(
   const options_json =
     typeof options === "string" ? parseLooseJson(options) : options || {};
   const {
-    actionTimeout = Number(
-      vars.getConfigValue("testExecution.actionTimeout") || 10000
-    ), // Default timeout
+    actionTimeout = config?.testExecution?.actionTimeout || Number(vars.getConfigValue("testExecution.actionTimeout")) || 10000, // Default timeout
     pattern,
     screenshot = false,
     screenshotText = "",
@@ -755,9 +883,7 @@ export async function clickTab(
   const options_json =
     typeof options === "string" ? parseLooseJson(options) : options || {};
   const {
-    actionTimeout = Number(
-      vars.getConfigValue("testExecution.actionTimeout") || 10000
-    ), // Default timeout
+    actionTimeout = config?.testExecution?.actionTimeout || Number(vars.getConfigValue("testExecution.actionTimeout")) || 10000, // Default timeout
     pattern,
     screenshot = false,
     screenshotText = "",
@@ -828,9 +954,7 @@ export async function clickRadioButton(
   const options_json =
     typeof options === "string" ? parseLooseJson(options) : options || {};
   const {
-    actionTimeout = Number(
-      vars.getConfigValue("testExecution.actionTimeout")
-    ) || 30000, // Default timeout
+    actionTimeout = config?.testExecution?.actionTimeout || Number(vars.getConfigValue("testExecution.actionTimeout")) || 30000, // Default timeout
     pattern,
     force = true, // Playwright's force option
     screenshot = false,
@@ -907,9 +1031,7 @@ export async function clickCheckbox(
   const options_json =
     typeof options === "string" ? parseLooseJson(options) : options || {};
   const {
-    actionTimeout = Number(
-      vars.getConfigValue("testExecution.actionTimeout")
-    ) || 30000, // Default timeout
+    actionTimeout = config?.testExecution?.actionTimeout || Number(vars.getConfigValue("testExecution.actionTimeout")) || 30000, // Default timeout
     pattern,
     force = true, // Playwright's force option
     screenshot = false,
@@ -995,7 +1117,7 @@ export async function selectDropdown(
     typeof options === "string" ? parseLooseJson(options) : options || {};
 
   const {
-    actionTimeout,
+    actionTimeout = config?.testExecution?.actionTimeout || Number(vars.getConfigValue("testExecution.actionTimeout")) || 30000,
     pattern,
     screenshot = false,
     screenshotText = "",
@@ -1073,6 +1195,114 @@ export async function selectDropdown(
 }
 
 /**
+ * Web: Select Dropdown by Index -field: {param} -index: {param} -options: {param}
+ *
+ * Selects a dropdown option by its index (zero-based).
+ * Works with both native <select> elements and custom dropdowns.
+ *
+ * @param page - Playwright Page instance
+ * @param field - Locator or label of the dropdown
+ * @param index - Index of the option to select (zero-based)
+ * @param options - Optional string or object containing:
+ *   - actionTimeout: custom timeout
+ *   - pattern: extra pattern string for locator resolution
+ *   - screenshot: boolean (default false)
+ *   - screenshotText: text for screenshot description
+ *   - screenshotFullPage: boolean (default true)
+ *   - smartIQ_refreshLoc: optional override for locator refresh key
+ */
+export async function selectDropdownByIndex(
+  page: Page,
+  field: string | Locator,
+  index: number,
+  options?: string | Record<string, any>
+) {
+  const options_json =
+    typeof options === "string" ? parseLooseJson(options) : options || {};
+
+  const {
+    actionTimeout = config?.testExecution?.actionTimeout || Number(vars.getConfigValue("testExecution.actionTimeout")) || 30000,
+    pattern,
+    screenshot = false,
+    screenshotText = "",
+    screenshotFullPage = true,
+    smartIQ_refreshLoc = "",
+  } = options_json;
+
+  if (isPlaywrightRunner()) {
+    await allure.step(
+      `Web: Select Dropdown by Index -field: ${field} -index: ${index} -options: ${JSON.stringify(
+        options_json
+      )}`,
+      async () => {
+        await doSelectDropdownByIndex();
+      }
+    );
+  } else {
+    await doSelectDropdownByIndex();
+  }
+  async function doSelectDropdownByIndex() {
+    if (!page) throw new Error("Page not initialized");
+
+    // Resolve dropdown element
+    const target =
+      typeof field === "string"
+        ? await webLocResolver(
+            "dropdown",
+            field,
+            page,
+            pattern,
+            actionTimeout,
+            smartIQ_refreshLoc
+          )
+        : field;
+
+    // Determine tag
+    const tag = await target.evaluate((el) => el.tagName.toLowerCase());
+
+    try {
+      if (tag === "select") {
+        // Native select dropdown
+        const optionsCount = await target.locator("option").count();
+        if (index < 0 || index >= optionsCount) {
+          throw new Error(
+            `❌ Index ${index} is out of bounds for dropdown with ${optionsCount} options`
+          );
+        }
+        const optionLocator = target.locator("option").nth(index);
+        const value = await optionLocator.getAttribute("value");
+        await target.selectOption({ value });
+      } else {
+        await waitInMilliSeconds(2000);
+        // Custom dropdown: click to open, then select by index
+        await target.click();
+        const dropdownOptions = page.locator('role=option');
+        const optionCount = await dropdownOptions.count();
+        if (index < 0 || index >= optionCount) {
+          throw new Error(
+            `❌ Index ${index} is out of bounds for custom dropdown with ${optionCount} options`
+          );
+        }
+        const optionToClick = dropdownOptions.nth(index);
+        await optionToClick.click();
+      }
+    } catch (e) {
+      throw new Error(
+        `❌ Failed to select index ${index} from dropdown: ${e}`
+      );
+    }
+
+    await processScreenshot(
+      page,
+      screenshot,
+      screenshotText || `Select dropdown index: ${index}`,
+      screenshotFullPage
+    );
+  }
+}
+
+
+/**
  * Web: Mouseover on link -field: {param} -options: {param}
  *
  * Performs a mouse hover over a link element on the page, identified by text, label, id, name, or pattern.
@@ -1098,7 +1328,7 @@ export async function mouseoverOnLink(
   const options_json =
     typeof options === "string" ? parseLooseJson(options) : options || {};
   const {
-    actionTimeout,
+    actionTimeout = config?.testExecution?.actionTimeout || Number(vars.getConfigValue("testExecution.actionTimeout")) || 30000,
     pattern,
     screenshot = false,
     screenshotText = "",
@@ -1172,10 +1402,8 @@ export async function verifyHeaderText(
   const options_json =
     typeof options === "string" ? parseLooseJson(options) : options || {};
   const {
-    actionTimeout = Number(
-      vars.getConfigValue("testExecution.actionTimeout") || 10000
-    ),
-    navigationTimeout = Number(
+    actionTimeout = config?.testExecution?.actionTimeout || Number(vars.getConfigValue("testExecution.actionTimeout")) || 30000,
+    navigationTimeout = config?.testExecution?.navigationTimeout || Number(
       vars.getConfigValue("testExecution.navigationTimeout") || 20000
     ),
     partialMatch = false,
@@ -1215,7 +1443,7 @@ export async function verifyHeaderText(
         let actualText = await target.nth(i).innerText();
         let expected = resolved_expectedText;
         let actual = actualText;
-        if (!ignoreCase) {
+        if (ignoreCase) {
           expected = expected.toLowerCase();
           actual = actual.toLowerCase();
         }
@@ -1270,7 +1498,7 @@ export async function verifyTextOnPage(
   const options_json =
     typeof options === "string" ? parseLooseJson(options) : options || {};
   const {
-    actionTimeout = Number(
+    actionTimeout = config?.testExecution?.actionTimeout || Number(
       vars.getConfigValue("testExecution.actionTimeout")
     ) || 30000,
     partialMatch = false,
@@ -1301,7 +1529,7 @@ export async function verifyTextOnPage(
     let allText = await page.textContent("body");
     let actual = allText || "";
     let expected = resolvedText;
-    if (!ignoreCase) {
+    if (ignoreCase) {
       actual = actual.toLowerCase();
       expected = expected.toLowerCase();
     }
@@ -1351,12 +1579,12 @@ export async function verifyTextAtLocation(
     typeof options === "string" ? parseLooseJson(options) : options || {};
 
   const {
-    actionTimeout = Number(
+    actionTimeout = config?.testExecution?.actionTimeout || Number(
       vars.getConfigValue("testExecution.actionTimeout")
     ) || 30000,
     partialMatch = false,
     pattern,
-    ignoreCase = true,
+    ignoreCase = false,
     assert = true,
     screenshot = true,
     screenshotText = "",
@@ -1474,7 +1702,7 @@ export async function verifyPageTitle(
     let expected = vars.replaceVariables(expectedTitle);
     let actual = actualTitle;
 
-    if (!ignoreCase) {
+    if (ignoreCase) {
       expected = expected.toLowerCase();
       actual = actual.toLowerCase();
     }
@@ -1528,9 +1756,7 @@ export async function verifyInputFieldPresent(
   const options_json =
     typeof options === "string" ? parseLooseJson(options) : options || {};
   const {
-    actionTimeout = Number(
-      vars.getConfigValue("testExecution.actionTimeout")
-    ) || 30000,
+    actionTimeout = config?.testExecution?.actionTimeout || Number(vars.getConfigValue("testExecution.actionTimeout")) || 30000,
     pattern,
     assert = true,
     screenshot = true,
@@ -1588,12 +1814,10 @@ export async function verifyInputFieldValue(
   const options_json =
     typeof options === "string" ? parseLooseJson(options) : options || {};
   const {
-    actionTimeout = Number(
-      vars.getConfigValue("testExecution.actionTimeout")
-    ) || 30000,
+    actionTimeout = config?.testExecution?.actionTimeout || Number(vars.getConfigValue("testExecution.actionTimeout")) || 30000,
     partialMatch = false,
     pattern,
-    ignoreCase = true,
+    ignoreCase = false,
     assert = true,
     screenshot = true,
     screenshotText = "",
@@ -1624,9 +1848,16 @@ export async function verifyInputFieldValue(
         : field;
 
     await target.waitFor({ state: "visible", timeout: actionTimeout });
-
-    const actualValue = (await target.inputValue()).trim();
-    const expected = vars.getValue(resolvedExpectedValue).trim();
+    const tag = await target.evaluate((el) => el.tagName.toLowerCase());
+    let actualValue:any;
+    let expected:any;
+    if (tag == "input" || tag == "textarea" || tag == "select") {
+      actualValue = (await target.inputValue()).trim();
+      expected = vars.getValue(resolvedExpectedValue).trim();
+    } else {
+      actualValue = (await target.innerText()).trim();
+      expected = vars.getValue(resolvedExpectedValue).trim();
+    }
 
     let match = false;
     if (ignoreCase) {
@@ -1660,6 +1891,107 @@ export async function verifyInputFieldValue(
   }
 }
 
+
+/**
+ * Web: Verify locked input field value -field: {param} -value: {param} -options: {param}
+ *
+ * Verifies that the value of an locked input field matches the expected value.
+ *
+ * @param field - The label, id, name, or selector of the input field to verify.
+ * @param expectedValue - The expected value of the input field.
+ * @param options - Optional JSON string or object:
+ *   - actionTimeout: [number] Optional timeout in milliseconds. Default: Configured timeout.
+ *   - partialMatch: [boolean] If true, performs substring match. Default: false.
+ *   - pattern: [string] Optional pattern to refine element search.
+ *   - ignoreCase: [boolean] Whether the match is case-sensitive. Default: true.
+ *   - assert: [boolean] If false, logs the failure but does not throw. Default: true.
+ *   - screenshot: [boolean] Capture screenshot. Default: true.
+ *   - screenshotText: [string] Screenshot description.
+ *   - screenshotFullPage: [boolean] Capture full page screenshot. Default: true.
+ */
+export async function verifyLockedInputFieldValue(
+  page: Page,
+  field: string | Locator,
+  expectedValue: string,
+  options?: string | Record<string, any>
+) {
+  const options_json =
+    typeof options === "string" ? parseLooseJson(options) : options || {};
+  const {
+    actionTimeout = config?.testExecution?.actionTimeout || Number(
+      vars.getConfigValue("testExecution.actionTimeout")
+    ) || 30000,
+    partialMatch = false,
+    pattern,
+    ignoreCase = false,
+    assert = true,
+    screenshot = true,
+    screenshotText = "",
+    screenshotFullPage = true,
+  } = options_json;
+  const resolvedExpectedValue = vars.replaceVariables(expectedValue);
+
+  if (isPlaywrightRunner()) {
+    await allure.step(
+      `Web: Verify input field value -field: ${field} -value: ${resolvedExpectedValue} -options: ${JSON.stringify(
+        options_json
+      )}`,
+      async () => {
+        await doVerifyInputFieldValue();
+      }
+    );
+  } else {
+    await doVerifyInputFieldValue();
+  }
+
+  async function doVerifyInputFieldValue() {
+    if (!page) throw new Error("Page not initialized");
+    await waitForPageToLoad(page, actionTimeout);
+
+    const target =
+      typeof field === "string"
+        ? await webLocResolver("locked", field, page, pattern, actionTimeout)
+        : field;
+
+    await target.waitFor({ state: "visible", timeout: actionTimeout });
+
+    const actualValue = (await target.inputValue()).trim();
+    const expected = vars.getValue(resolvedExpectedValue).trim();
+
+    let match = false;
+    if (ignoreCase) {
+      match = partialMatch
+        ? actualValue.includes(expected)
+        : actualValue === expected;
+    } else {
+      match = partialMatch
+        ? actualValue.toLowerCase().includes(expected.toLowerCase())
+        : actualValue.toLowerCase() === expected.toLowerCase();
+    }
+
+    if (match) {
+      await attachLog(`✅ Input value matched: "${actualValue}"`, "text/plain");
+    } else {
+      await attachLog(
+        `❌ Locked input value mismatch: expected "${expected}", got "${actualValue}"`,
+        "text/plain"
+      );
+      if (assert !== false) {
+        throw new Error(`❌ Locked input value mismatch for field "${field}"`);
+      }
+    }
+
+    await processScreenshot(
+      page,
+      screenshot,
+      screenshotText,
+      screenshotFullPage
+    );
+  }
+}
+
+
+
 /**
  * Web: Verify Tab field Present -field: {param} -options: {param}
  *
@@ -1686,7 +2018,7 @@ export async function verifyTabField(
   const options_json =
     typeof options === "string" ? parseLooseJson(options) : options || {};
   const {
-    actionTimeout = Number(
+    actionTimeout = config?.testExecution?.actionTimeout || Number(
       vars.getConfigValue("testExecution.actionTimeout")
     ) || 30000,
     pattern,
@@ -1808,7 +2140,7 @@ export async function verifyToastTextContains(
   const options_json =
     typeof options === "string" ? parseLooseJson(options) : options || {};
   const {
-    actionTimeout = Number(
+    actionTimeout = config?.testExecution?.actionTimeout || Number(
       vars.getConfigValue("testExecution.actionTimeout")
     ) || 30000,
     pattern,
@@ -1881,7 +2213,7 @@ export async function waitForInputState(
     typeof options === "string" ? parseLooseJson(options) : options || {};
 
   const {
-    actionTimeout = Number(
+    actionTimeout = config?.testExecution?.actionTimeout || Number(
       vars.getConfigValue("testExecution.actionTimeout") || 30000
     ),
     pattern,
@@ -1966,7 +2298,7 @@ export async function waitForUrl(
   const options_json =
     typeof options === "string" ? parseLooseJson(options) : options || {};
   const {
-    actionTimeout = Number(
+    actionTimeout = config?.testExecution?.actionTimeout || Number(
       vars.getConfigValue("testExecution.actionTimeout")
     ) || 30000,
     match = "contains",
@@ -2123,6 +2455,610 @@ async function processScreenshot(
     console.warn(`⚠️ Error attaching screenshot: ${error.message}`);
   }
 }
+
+/**
+ * Web: Verify field is locked -field: {param} -options: {param}
+ * Verifies that the specified field on the page is locked (read-only).
+ * Designed for use in Cucumber step definitions.
+ * 
+ * @param page - Playwright Page instance.
+ * @param field - The label, text, id, name, or selector of the field.
+ * @param options - Optional settings for the verification action. Can be a JSON string or an object:
+ *  - screenshot: [boolean] Capture a screenshot. Default: true.
+ *  - screenshotText: [string] Description for the screenshot.
+ * - screenshotFullPage: [boolean] Capture full page screenshot. Default: true.
+ * 
+ */
+export async function verifyFieldIsLocked(
+  page: Page,
+  field: string | Locator,
+  options?: string | Record<string, any>
+) {
+  const options_json =
+    typeof options === "string" ? vars.parseLooseJson(options) : options || {};
+  const {
+    iframe = "",
+    actionTimeout = config?.testExecution?.actionTimeout || Number(
+      vars.getConfigValue("testExecution.actionTimeout")
+    ) || 30000, // Default timeout
+    pattern,
+    screenshot = false,
+    screenshotText = "",
+    screenshotFullPage = true,
+    screenshotField = false,
+    smartIQ_refreshLoc = "",
+  } = options_json || {};
+
+  if (isPlaywrightRunner()) {
+    await allure.step(
+      `Web: Verify field is locked -field: ${field} -options: ${JSON.stringify(options_json)}`,
+      async () => {
+        await doverifyFieldLocked();
+      }
+    );
+  } else {
+    await doverifyFieldLocked();
+  }
+
+  async function doverifyFieldLocked() {
+    const target =
+      typeof field === "string"
+        ? await webLocResolver(
+            "locked",
+            field,
+            page,
+            pattern,
+            smartIQ_refreshLoc
+          )
+        : field;
+    if (iframe) {
+      await waitForEnabled(
+        page.frameLocator(iframe).locator(target),
+        actionTimeout
+      );
+      await expect(target).toBeVisible({ timeout: actionTimeout });
+    }else{
+      await waitForEnabled(target, actionTimeout);
+      await expect(target).toBeVisible({ timeout: actionTimeout });
+    }
+   const isFieldScreenshot = screenshotField === true;
+    await processScreenshot(
+      page,
+      screenshot,
+      screenshotText,
+      !isFieldScreenshot,
+      isFieldScreenshot ? target : undefined
+    );
+  } 
+}
+
+/**
+ * Web: Verify field is mandatory -field: {param} -options: {param}
+ * Verifies that the specified field on the page is locked (read-only).
+ * Designed for use in Cucumber step definitions.
+ * 
+ * @param page - Playwright Page instance.
+ * @param field - The label, text, id, name, or selector of the field.
+ * @param options - Optional settings for the verification action. Can be a JSON string or an object:
+ *  - screenshot: [boolean] Capture a screenshot. Default: true.
+ *  - screenshotText: [string] Description for the screenshot.
+ * - screenshotFullPage: [boolean] Capture full page screenshot. Default: true.
+ * 
+ */
+export async function verifyFieldIsMandatory(
+  page: Page,
+  field: string | Locator,
+  options?: string | Record<string, any>
+) {
+  const options_json =
+    typeof options === "string" ? vars.parseLooseJson(options) : options || {};
+  const {
+    iframe = "",
+    actionTimeout = config?.testExecution?.actionTimeout || Number(
+      vars.getConfigValue("testExecution.actionTimeout")
+    ) || 30000, // Default timeout
+    pattern,
+    screenshot = false,
+    screenshotText = "",
+    screenshotFullPage = true,
+    screenshotField = false,
+    smartIQ_refreshLoc = "",
+  } = options_json || {};
+
+  if (isPlaywrightRunner()) {
+    await allure.step(
+      `Web: Verify field is mandatory -field: ${field} -options: ${JSON.stringify(options_json)}`,
+      async () => {
+        await doverifyFieldIsMandatory();
+      }
+    );
+  } else {
+    await doverifyFieldIsMandatory();
+  }
+
+  async function doverifyFieldIsMandatory() {
+    const target =
+      typeof field === "string"
+        ? await webLocResolver(
+            "mandatory",
+            field,
+            page,
+            pattern,
+            smartIQ_refreshLoc
+          )
+        : field;
+    if (iframe) {
+      await waitForEnabled(
+        page.frameLocator(iframe).locator(target),
+        actionTimeout
+      );
+      await expect(target).toBeVisible({ timeout: actionTimeout });
+    }else{
+      await waitForEnabled(target, actionTimeout);
+      await expect(target).toBeVisible({ timeout: actionTimeout });
+    }
+   const isFieldScreenshot = screenshotField === true;
+    await processScreenshot(
+      page,
+      screenshot,
+      screenshotText,
+      !isFieldScreenshot,
+      isFieldScreenshot ? target : undefined
+    );
+  } 
+}
+
+/**
+ * Web: Verify field is secured -field: {param} -options: {param}
+ * Verifies that the specified field on the page is secured.
+ * Designed for use in Cucumber step definitions.
+ * 
+ * @param page - Playwright Page instance.
+ * @param field - The label, text, id, name, or selector of the field.
+ * @param options - Optional settings for the verification action. Can be a JSON string or an object:
+ *  - screenshot: [boolean] Capture a screenshot. Default: true.
+ *  - screenshotText: [string] Description for the screenshot.
+ * - screenshotFullPage: [boolean] Capture full page screenshot. Default: true.
+ * 
+ */
+export async function verifyFieldIsSecured(
+  page: Page,
+  field: string | Locator,
+  options?: string | Record<string, any>
+) {
+  const options_json =
+    typeof options === "string" ? vars.parseLooseJson(options) : options || {};
+  const {
+    iframe = "",
+    actionTimeout = config?.testExecution?.actionTimeout || Number(
+      vars.getConfigValue("testExecution.actionTimeout")
+    ) || 30000, // Default timeout
+    pattern,
+    screenshot = false,
+    screenshotText = "",
+    screenshotFullPage = true,
+    screenshotField = false,
+    smartIQ_refreshLoc = "",
+  } = options_json || {};
+
+  if (isPlaywrightRunner()) {
+    await allure.step(
+      `Web: Verify field is secured -field: ${field} -options: ${JSON.stringify(options_json)}`,
+      async () => {
+        await doverifyFieldIsSecured();
+      }
+    );
+  } else {
+    await doverifyFieldIsSecured();
+  }
+
+  async function doverifyFieldIsSecured() {
+    const target =
+      typeof field === "string"
+        ? await webLocResolver(
+            "secured",
+            field,
+            page,
+            pattern,
+            smartIQ_refreshLoc
+          )
+        : field;
+    if (iframe) {
+      await waitForEnabled(
+        page.frameLocator(iframe).locator(target),
+        actionTimeout
+      );
+      await expect(target).toBeVisible({ timeout: actionTimeout });
+    }else{
+      await waitForEnabled(target, actionTimeout);
+      await expect(target).toBeVisible({ timeout: actionTimeout });
+    }
+   const isFieldScreenshot = screenshotField === true;
+    await processScreenshot(
+      page,
+      screenshot,
+      screenshotText,
+      !isFieldScreenshot,
+      isFieldScreenshot ? target : undefined
+    );
+  } 
+}
+
+/**
+ * Web: Verify select field value -field: {param} -value: {param} -options: {param}
+ *
+ * Verifies that the value of a select field matches the expected value.
+ *
+ * @param field - The label, id, name, or selector of the select field to verify.
+ * @param expectedValue - The expected value of the select field.
+ * @param options - Optional JSON string or object:
+ *   - actionTimeout: [number] Optional timeout in milliseconds. Default: Configured timeout.
+ *   - partialMatch: [boolean] If true, performs substring match. Default: false.
+ *   - pattern: [string] Optional pattern to refine element search.
+ *   - ignoreCase: [boolean] Whether the match is case-sensitive. Default: true.
+ *   - assert: [boolean] If false, logs the failure but does not throw. Default: true.
+ *   - screenshot: [boolean] Capture screenshot. Default: true.
+ *   - screenshotText: [string] Screenshot description.
+ *   - screenshotFullPage: [boolean] Capture full page screenshot. Default: true.
+ */
+export async function verifySelectDropdownValue(
+  page: Page,
+  field: string | Locator,
+  expectedValue: string,
+  options?: string | Record<string, any>
+) {
+  const options_json =
+    typeof options === "string" ? parseLooseJson(options) : options || {};
+  const {
+    actionTimeout = config?.testExecution?.actionTimeout || Number(
+      vars.getConfigValue("testExecution.actionTimeout")
+    ) || 30000,
+    partialMatch = false,
+    pattern,
+    ignoreCase = false,
+    assert = true,
+    screenshot = true,
+    screenshotText = "",
+    screenshotFullPage = true,
+  } = options_json;
+  const resolvedExpectedValue = vars.replaceVariables(expectedValue);
+
+  if (isPlaywrightRunner()) {
+    await allure.step(
+      `Web: Verify select dropdown value -field: ${field} -value: ${resolvedExpectedValue} -options: ${JSON.stringify(
+        options_json
+      )}`,
+      async () => {
+        await doVerifySelectDropdownValue();
+      }
+    );
+  } else {
+    await doVerifySelectDropdownValue();
+  }
+
+  async function doVerifySelectDropdownValue() {
+    if (!page) throw new Error("Page not initialized");
+    await waitForPageToLoad(page, actionTimeout);
+
+    const target =
+      typeof field === "string"
+        ? await webLocResolver("dropdown", field, page, pattern, actionTimeout)
+        : field;
+
+    await target.waitFor({ state: "visible", timeout: actionTimeout });
+
+    const actualValue = (await target.getAttribute("value")).trim();
+    const expected = vars.getValue(resolvedExpectedValue).trim();
+
+    let match = false;
+    if (ignoreCase) {
+      match = partialMatch
+        ? actualValue.includes(expected)
+        : actualValue === expected;
+    } else {
+      match = partialMatch
+        ? actualValue.toLowerCase().includes(expected.toLowerCase())
+        : actualValue.toLowerCase() === expected.toLowerCase();
+    }
+
+    if (match) {
+      await attachLog(`✅ Select value matched: "${actualValue}"`, "text/plain");
+    } else {
+      await attachLog(
+        `❌ Select value mismatch: expected "${expected}", got "${actualValue}"`,
+        "text/plain"
+      );
+      if (assert !== false) {
+        throw new Error(`❌ Select value mismatch for field "${field}"`);
+      }
+    }
+
+    await processScreenshot(
+      page,
+      screenshot,
+      screenshotText,
+      screenshotFullPage
+    );
+  }
+}
+
+/**
+ * Web: Verify select list does not have given value -field: {param} -value: {param} -options: {param}
+ *
+ * Verifies that a select dropdown does NOT contain the specified value in its options list.
+ *
+ * @param page - Playwright Page instance
+ * @param field - The label, id, name, or selector of the select field to verify.
+ * @param excludedValue - The value that should NOT be present in the dropdown options.
+ * @param options - Optional JSON string or object:
+ *   - actionTimeout: [number] Optional timeout in milliseconds. Default: Configured timeout.
+ *   - pattern: [string] Optional pattern to refine element search.
+ *   - ignoreCase: [boolean] Whether the match is case-sensitive. Default: true.
+ *   - assert: [boolean] If false, logs the failure but does not throw. Default: true.
+ *   - screenshot: [boolean] Capture screenshot. Default: true.
+ *   - screenshotText: [string] Screenshot description.
+ *   - screenshotFullPage: [boolean] Capture full page screenshot. Default: true.
+ *
+ * @example
+ *  Web: Verify select list does not have given value -field: "Country" -value: "Antarctica" -options: "{screenshot: true, screenshotText: 'Verified Antarctica not in list'}"
+ */
+export async function verifySelectListNotHaveGivenValue(
+  page: Page,
+  field: string | Locator,
+  excludedValue: string,
+  options?: string | Record<string, any>
+) {
+  const options_json =
+    typeof options === "string" ? parseLooseJson(options) : options || {};
+  const {
+    actionTimeout = config?.testExecution?.actionTimeout || Number(
+      vars.getConfigValue("testExecution.actionTimeout")
+    ) || 30000,
+    pattern,
+    ignoreCase = false,
+    assert = true,
+    screenshot = true,
+    screenshotText = "",
+    screenshotFullPage = true,
+  } = options_json;
+  const resolvedExcludedValue = vars.replaceVariables(excludedValue);
+
+  if (isPlaywrightRunner()) {
+    await allure.step(
+      `Web: Verify select list does not have given value -field: ${field} -value: ${resolvedExcludedValue} -options: ${JSON.stringify(
+        options_json
+      )}`,
+      async () => {
+        await doVerifySelectListNotHaveGivenValue();
+      }
+    );
+  } else {
+    await doVerifySelectListNotHaveGivenValue();
+  }
+
+  async function doVerifySelectListNotHaveGivenValue() {
+    if (!page) throw new Error("Page not initialized");
+    await waitForPageToLoad(page, actionTimeout);
+
+    const target =
+      typeof field === "string"
+        ? await webLocResolver("dropdown", field, page, pattern, actionTimeout)
+        : field;
+
+    await target.waitFor({ state: "visible", timeout: actionTimeout });
+    await target.click();
+    await page.waitForTimeout(2000); // Wait for options to render
+
+    const optionLocator = target.locator('xpath=following::div[@role="option"]');
+    const size = await optionLocator.count();
+    if (size === 0) {
+      throw new Error(`❌ No options found for the select field "${field}".`);
+    }
+
+    // Collect all option texts and check for the excluded value
+    const optionTexts: string[] = [];
+    for (let i = 0; i < size; i++) {
+      optionTexts.push((await optionLocator.nth(i).innerText()).trim());
+    }
+
+    // Case handling: when ignoreCase=true, compare in lowercase; else compare exact
+    const found = optionTexts.some((optText) => {
+      const current = ignoreCase ? optText.toLowerCase() : optText;
+      const compare = ignoreCase
+        ? vars.replaceVariables(resolvedExcludedValue).trim().toLowerCase()
+        : vars.replaceVariables(resolvedExcludedValue).trim();
+      return current === compare;
+    });
+
+    if (found) {
+      const msg = `❌ Select list should NOT contain "${resolvedExcludedValue}", but it was found.`;
+      await attachLog(msg, "text/plain");
+      if (assert !== false) {
+        throw new Error(msg);
+      }
+    } else {
+      await attachLog(
+        `✅ Select list does not contain "${resolvedExcludedValue}" as expected.`,
+        "text/plain"
+      );
+    }
+
+    await processScreenshot(
+      page,
+      screenshot,
+      screenshotText || `Verified select list does not contain: ${resolvedExcludedValue}`,
+      screenshotFullPage
+    );
+  }
+}
+
+/**
+ * Web: Upload file at -field: {param} with filename: {param} -options: {param}
+ * Uploads a file to a file input field on the web page.
+ *
+ * @param page - Playwright Page instance.
+ * @param field - The label, text, id, name, or selector of the file input field.
+ * @param file - The filename (relative to 'test-data' directory) to upload.
+ * @param options - Optional JSON string or object:
+ * - actionTimeout: [number] Optional timeout in milliseconds. Default: Configured timeout.
+ * - pattern: [string] Optional pattern to refine element search.
+ * - screenshot: [boolean] Capture screenshot after upload. Default: false.
+ * - screenshotText: [string] Description for the screenshot.
+ * - screenshotFullPage: [boolean] Capture full page screenshot. Default: true.
+ * @example
+ *  Web: Upload file at -field: "Profile Picture" with filename: "avatar.png" -options: "{screenshot: true, screenshotText: 'Uploaded profile picture'}"
+ */
+export async function uploadFile(
+  page: Page,
+  field: string | Locator,
+  file: string,
+  options?: string | Record<string, any>
+) {
+  const basePath = path.resolve(`test-data`);
+  const filePath = path.join(basePath, file);
+
+  const options_json =
+    typeof options === "string" ? parseLooseJson(options) : options || {};
+  const {
+    actionTimeout = config?.testExecution?.actionTimeout || Number(
+      vars.getConfigValue("testExecution.actionTimeout")
+    ) || 10000,
+    screenshot = false,
+    screenshotText = "",
+    screenshotFullPage = true,
+    pattern,
+  } = options_json || {};
+
+  if (isPlaywrightRunner()) {
+    await allure.step(
+      `Web: Upload file at -field: ${field} with filename: ${file} -options: ${JSON.stringify(
+        options_json
+      )}`,
+      async () => {
+        await doUploadFile();
+      }
+    );
+  } else {
+    await doUploadFile();
+  }
+
+  async function doUploadFile() {
+    if (!page) throw new Error("Page not initialized");
+    await waitForPageToLoad(page, actionTimeout);
+    const target =
+      typeof field === "string"
+        ? await webLocResolver("button", field, page, pattern, actionTimeout)
+        : field;
+    await target.waitFor({ state: "visible", timeout: actionTimeout });
+    const fileChooserPromise = page.waitForEvent('filechooser');
+    await target.click();
+    const fileChooser = await fileChooserPromise;
+    await fileChooser.setFiles(filePath);
+    console.log(`✅ Uploaded file "${filePath}" into field "${field}"`);
+  }
+}
+
+
+/**
+ * Web: Store element text in Variable -field: {param} into variable: {param} -options: {param}
+ * Stores the text content of a web element into a variable for later use.
+ * @param page - Playwright Page instance.
+ * @param field - The label, text, id, name, or selector of the web element.
+ * @param variableName - The name of the variable to store the text content.
+ * @param options - Optional JSON string or object:
+ *  - actionTimeout: [number] Optional timeout in milliseconds. Default: Configured timeout.
+ * - pattern: [string] Optional pattern to refine element search.
+ * - attribute: [string] If provided, reads specific attribute instead of text/value.
+ * - trim: [boolean] Whether to trim whitespace. Default: true.
+ * - normalizeWhitespace: [boolean] Whether to normalize whitespace. Default: true.
+ * - screenshot: [boolean] Capture screenshot after storing text. Default: false.
+ * - screenshotText: [string] Description for the screenshot.
+ */
+export async function storeElementTextInVariable(
+  page: Page,
+  field: string | Locator,
+  variableName: string,
+  options?: string | Record<string, any>
+) {
+  const options_json =
+    typeof options === "string" ? parseLooseJson(options) : options || {};
+  // Default fieldType to "input" if not provided or falsy
+  const {
+    actionTimeout = config?.testExecution?.actionTimeout || Number(
+      vars.getConfigValue("testExecution.actionTimeout")
+    ) || 30000,
+    pattern,
+    fieldType = "input",
+    attribute = "",
+    trim = true,
+    normalizeWhitespace = true,
+    screenshot = false,
+    screenshotText = "",
+    screenshotFullPage = true,
+  } = options_json;
+
+  if (isPlaywrightRunner()) {
+    await allure.step(
+      `Web: Store element text in Variable -field: ${field} into variable: ${variableName} -options: ${JSON.stringify(
+        options_json
+      )}`,
+      async () => {
+        await doStoreElementTextInVariable();
+      }
+    );
+  } else {
+    await doStoreElementTextInVariable();
+  }
+
+  async function doStoreElementTextInVariable() {
+    if (!page) throw new Error("Page not initialized");
+
+    const target =
+      typeof field === "string"
+        ? await webLocResolver(fieldType, field, page, pattern, actionTimeout)
+        : field;
+
+    await target.waitFor({ state: "visible", timeout: actionTimeout });
+
+    const tag = await target.evaluate((el) => el.tagName.toLowerCase());
+    let raw: string | null;
+
+    if (attribute) {
+      raw = await target.getAttribute(attribute);
+    } else if (tag === "input" || tag === "textarea" || tag === "select") {
+      raw = await target.inputValue();
+    } else {
+      raw = await target.innerText();
+    }
+
+    let value = (raw ?? "").toString();
+    if (trim) value = value.trim();
+    if (normalizeWhitespace) value = value.replace(/\s+/g, " ");
+
+    if (typeof (vars as any).setValue === "function") {
+      vars.setValue(variableName, value);
+    } else if (typeof (vars as any).set === "function") {
+      (vars as any).set(variableName, value);
+    } else {
+      throw new Error(
+        `No supported setter found on vars to store "${variableName}"`
+      );
+    }
+
+    await attachLog(
+      `✅ Stored element text into "${variableName}": "${value}"`,
+      "text/plain"
+    );
+
+    await processScreenshot(
+      page,
+      screenshot,
+      screenshotText || `Stored text for: ${variableName}`,
+      screenshotFullPage
+    );
+  }
+}
+
 
 function escapeRegExp(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

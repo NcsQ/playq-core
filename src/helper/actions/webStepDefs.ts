@@ -121,3 +121,68 @@ Given("Web: Press Key -key: {param} -options: {param}", async function (key, opt
   let page = webFixture.getCurrentPage();
   await webActions.pressKey(page, key, options);
 });
+
+Given("Web: Wait for displayed -field: {param} -options: {param}", async function (field, options) {
+  let page = webFixture.getCurrentPage();
+  await webActions.waitForDisplayed(page, field, options);
+});
+
+Given("Web: Wait for disappear -field: {param} -options: {param}", async function (field, options) {
+  let page = webFixture.getCurrentPage();
+  await webActions.waitForDisappear(page, field, options);
+});
+
+Given("Web: Wait for Header -header: {param} -text: {param} -options: {param}", async function (header, headerText, options) {
+  let page = webFixture.getCurrentPage();
+  await webActions.waitForHeader(page, header, headerText, options);
+});
+
+Given("Web: Select Dropdown by Index -field: {param} -index: {int} -options: {param}", async function (field, index, options) {
+  let page = webFixture.getCurrentPage();
+  await webActions.selectDropdownByIndex(page, field, index, options);
+});
+
+Given("Web: Verify locked input field value -field: {param} -value: {param} -options: {param}", async function (field, expectedValue, options) {
+  let page = webFixture.getCurrentPage();
+  await webActions.verifyLockedInputFieldValue(page, field, expectedValue, options);
+});
+
+Given("Web: Take Screenshot -options: {param}", async function (options) {
+  let page = webFixture.getCurrentPage();
+  await webActions.takeScreenshot(page, options);
+});
+
+Given("Web: Verify field is locked -field: {param} -options: {param}", async function (field, options) {
+  let page = webFixture.getCurrentPage();
+  await webActions.verifyFieldIsLocked(page, field, options);
+});
+
+Given("Web: Verify field is mandatory -field: {param} -options: {param}", async function (field, options) {
+  let page = webFixture.getCurrentPage();
+  await webActions.verifyFieldIsMandatory(page, field, options);
+});
+
+Given("Web: Verify field is secured -field: {param} -options: {param}", async function (field, options) {
+  let page = webFixture.getCurrentPage();
+  await webActions.verifyFieldIsSecured(page, field, options);
+});
+
+Given("Web: Verify select field value -field: {param} -value: {param} -options: {param}", async function (field, expectedValue, options) {
+  let page = webFixture.getCurrentPage();
+  await webActions.verifySelectDropdownValue(page, field, expectedValue, options);
+});
+
+Given("Web: Verify select list does not have given value -field: {param} -value: {param} -options: {param}", async function (field, excludedValue, options) {
+  let page = webFixture.getCurrentPage();
+  await webActions.verifySelectListNotHaveGivenValue(page, field, excludedValue, options);
+});
+
+Given("Web: Upload file at -field: {param} with filename: {param} -options: {param}", async function (fieldName, fileName, options) {
+  let page = webFixture.getCurrentPage();
+  await webActions.uploadFile(page, fieldName, fileName, options);
+});
+
+Given("Web: Store input value in variable -field: {param} -variableName: {param} -options: {param}", async function (field, variableName, options) {
+  let page = webFixture.getCurrentPage();
+  await webActions.storeElementTextInVariable(page, field, variableName, options);
+});
