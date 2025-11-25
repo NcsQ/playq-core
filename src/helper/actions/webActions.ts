@@ -1084,6 +1084,103 @@ export async function clickCheckbox(
   }
 }
 
+/**
+ * Web: Click Button -field: {param} -options: {param}
+ *
+ * Clicks a button element on the page, identified by text, label, id, name, pattern, or locator.
+ *
+ * @param field - The label, text, id, name, or selector of the button to click (e.g., "Submit", "Save", "Cancel").
+ * @param options - Optional JSON string or object:
+ *  - iframe: [string] Optional iframe selector if the button is inside an iframe. Default: "".
+ *   - actionTimeout: [number] Optional timeout in milliseconds for waiting. Default: Configured testExecution > actionTimeout or 10000 milliseconds.
+ *   - pattern: [string] Optional pattern to refine element search. Default: Configured pattern.
+ *   - screenshot: [boolean] Capture a screenshot after clicking the button. Default: false.
+ *   - screenshotText: [string] Text description for the screenshot. Default: "".
+ *   - screenshotFullPage: [boolean] Capture a full page screenshot. Default: true.
+ *   - screenshotBefore: [boolean] Capture a screenshot before clicking. Default: false.
+ *
+ * @example
+ *  Web: Click Button -field: "Register" -options: "{screenshot: true, screenshotText: 'After clicking Register'}"
+ */
+export async function clicktablefield(
+  page: Page,
+  field: string | Locator,
+  options?: string | Record<string, any>
+) {
+  const options_json =
+    typeof options === "string" ? parseLooseJson(options) : options || {};
+  const {
+    iframe = "",
+    actionTimeout = config?.testExecution?.actionTimeout || Number(
+      vars.getConfigValue("testExecution.actionTimeout") || 10000
+    ),
+    pattern,
+    fieldType = "table_column",
+    isDoubleClick = false,
+    screenshot = false,
+    screenshotText = "",
+    screenshotFullPage = true,
+    screenshotBefore = false,
+  } = options_json || {};
+
+  if (isPlaywrightRunner()) {
+    await allure.step(
+      `Web: Click table field -field: ${field} -options: ${JSON.stringify(
+        options_json
+      )}`,
+      async () => {
+        await doClicktableField();
+      }
+    );
+  } else {
+    await doClicktableField();
+  }
+  async function doClicktableField() {
+    if (!page) throw new Error("Page not initialized");
+    const target =
+      typeof field === "string"
+        ? await webLocResolver(
+          fieldType,
+          field,
+          page,
+          pattern,
+          actionTimeout,
+          "after"
+        )
+        : field;
+    await processScreenshot(
+      page,
+      screenshotBefore,
+      screenshotText,
+      screenshotFullPage
+    );
+
+    if (iframe) {
+      await waitForEnabled(page.frameLocator(iframe).locator(target),actionTimeout);
+      if (isDoubleClick == true) {
+        await page.frameLocator(iframe).locator(target).dblclick({delay: 100, timeout: actionTimeout });
+      } else {
+        await page.frameLocator(iframe).locator(target).click({ timeout: actionTimeout });
+      }
+    } else {
+      await waitForEnabled(target, actionTimeout);
+      if (isDoubleClick == true) {
+        await target.dblclick({delay: 100, timeout: actionTimeout });
+      } else {
+        await target.click({ timeout: actionTimeout });
+      }
+    }
+    await page.waitForLoadState("load");
+
+    await processScreenshot(
+      page,
+      screenshot,
+      screenshotText,
+      screenshotFullPage
+    );
+  }
+}
+
 // =================================== SELECT STEPS ===================================
 
 /**
@@ -2419,7 +2516,7 @@ export async function takeScreenshot(
   await processScreenshot(page, true, screenshot_text, screenshot_fullPage);
 }
 
-async function processScreenshot(
+export async function processScreenshot(
   page: Page,
   shouldTake: boolean,
   text: string = "Screenshot",
@@ -2992,6 +3089,7 @@ export async function storeElementTextInVariable(
     attribute = "",
     trim = true,
     normalizeWhitespace = true,
+    numericsOnly = false,
     screenshot = false,
     screenshotText = "",
     screenshotFullPage = true,
@@ -3034,7 +3132,7 @@ export async function storeElementTextInVariable(
     let value = (raw ?? "").toString();
     if (trim) value = value.trim();
     if (normalizeWhitespace) value = value.replace(/\s+/g, " ");
-
+    if (numericsOnly) value = value.replace(/\D/g, "");
     if (typeof (vars as any).setValue === "function") {
       vars.setValue(variableName, value);
     } else if (typeof (vars as any).set === "function") {
@@ -3058,6 +3156,93 @@ export async function storeElementTextInVariable(
     );
   }
 }
+
+/**
+ * Web: Scroll to element -field: {param} -options: {param}
+ *
+ * Scrolls the page to make the specified element visible in the viewport.
+ *
+ * @param page - Playwright Page instance
+ * @param field - The label, id, name, or selector of the element to scroll to
+ * @param options - Optional JSON string or object:
+ *   - actionTimeout: [number] Optional timeout in milliseconds. Default: Configured timeout.
+ *   - pattern: [string] Optional pattern to refine element search.
+ *   - behavior: [string] Scroll behavior: "smooth" | "instant" | "auto". Default: "smooth".
+ *   - block: [string] Vertical alignment: "start" | "center" | "end" | "nearest". Default: "center".
+ *   - inline: [string] Horizontal alignment: "start" | "center" | "end" | "nearest". Default: "nearest".
+ *   - screenshot: [boolean] Capture screenshot after scrolling. Default: false.
+ *   - screenshotText: [string] Description for the screenshot.
+ *   - screenshotFullPage: [boolean] Capture full page screenshot. Default: true.
+ *
+ * @example
+ *  Web: Scroll to element -field: "Footer" -options: "{behavior: 'smooth', block: 'center', screenshot: true}"
+ */
+export async function scrollToElement(
+  page: Page,
+  field: string | Locator,
+  options?: string | Record<string, any>
+) {
+  const options_json =
+    typeof options === "string" ? parseLooseJson(options) : options || {};
+  const {
+    actionTimeout = config?.testExecution?.actionTimeout || Number(
+      vars.getConfigValue("testExecution.actionTimeout")
+    ) || 30000,
+    pattern,
+    fieldType = "button",
+    behavior = "smooth",
+    block = "center",
+    inline = "nearest",
+    screenshot = false,
+    screenshotText = "",
+    screenshotFullPage = true,
+  } = options_json;
+
+  if (isPlaywrightRunner()) {
+    await allure.step(
+      `Web: Scroll to element -field: ${field} -options: ${JSON.stringify(
+        options_json
+      )}`,
+      async () => {
+        await doScrollToElement();
+      }
+    );
+  } else {
+    await doScrollToElement();
+  }
+
+  async function doScrollToElement() {
+    if (!page) throw new Error("Page not initialized");
+
+    const target =
+      typeof field === "string"
+        ? await webLocResolver(fieldType, field, page, pattern, actionTimeout)
+        : field;
+
+    await target.waitFor({ state: "visible", timeout: actionTimeout });
+    
+    await target.scrollIntoViewIfNeeded();
+    
+    // Use evaluate for more precise scroll control
+    await target.evaluate((element, scrollOptions) => {
+      element.scrollIntoView({
+        behavior: scrollOptions.behavior as ScrollBehavior,
+        block: scrollOptions.block as ScrollLogicalPosition,
+        inline: scrollOptions.inline as ScrollLogicalPosition
+      });
+    }, { behavior, block, inline });
+
+    await attachLog(`✅ Scrolled to element: ${field}`, "text/plain");
+
+    await processScreenshot(
+      page,
+      screenshot,
+      screenshotText || `Scrolled to element: ${field}`,
+      screenshotFullPage
+    );
+  }
+}
+
 
 
 function escapeRegExp(str: string): string {

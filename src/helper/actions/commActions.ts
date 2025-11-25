@@ -1,3 +1,4 @@
+import xlsx from '@e965/xlsx';
 import { vars, webFixture, logFixture } from "@src/global";
 import { warn } from "winston";
 import * as crypto from '../util/utilities/cryptoUtil';
@@ -328,5 +329,55 @@ export async function generateTotpTokenToVariable(
     // Generate and return token
     const token = totpHelper.generateToken();
     vars.setValue(varName, token);
+  }
+}
+
+/**
+ * Comm: Write-Data-To-Cell -filePath: {param} -sheetName: {param} -cellData: {param}
+ * Writes data to a specific cell in an Excel (.xlsx) or CSV file.
+ * @param filePath Path to the Excel or CSV file
+ * @param sheetName Sheet name (for Excel, default: first sheet; ignored for CSV)
+ * @param cellData Cell and value in the format (e.g., "E2,SomeValue")
+ */
+export function writeToExcelOrCsvFile(filePath: string, sheetName: string | undefined, cellData: string) {
+  const absPath = path.resolve(filePath);
+  if (!fs.existsSync(absPath)) throw new Error(`File not found: ${absPath}`);
+  const [cell, ...valueParts] = cellData.split(',');
+  if (!cell || valueParts.length === 0) throw new Error('cellData must be in format "Cell,Value"');
+  let value = valueParts.join(',');
+  // Variable replacement if needed
+  if (typeof vars?.replaceVariables === 'function') {
+    value = vars.replaceVariables(value);
+  }
+  const ext = path.extname(absPath).toLowerCase();
+  if (ext === '.xlsx') {
+    const workbook = xlsx.readFile(absPath);
+    const sheet = sheetName || workbook.SheetNames[0];
+    const ws = workbook.Sheets[sheet];
+    if (!ws) throw new Error(`Sheet not found: ${sheet}`);
+    ws[cell.trim()] = { t: 's', v: value };
+    xlsx.writeFile(workbook, absPath);
+    console.log(`✅ Wrote value '${value}' to cell ${cell} in ${absPath} (${sheet})`);
+  } else if (ext === '.csv') {
+    // For CSV, convert cell (e.g., E2) to row/col index
+    const csvContent = fs.readFileSync(absPath, 'utf-8');
+    const rows = csvContent.split(/\r?\n/).map(r => r.split(','));
+    const match = cell.trim().match(/^([A-Z]+)(\d+)$/i);
+    if (!match) throw new Error('Invalid cell format for CSV. Use e.g. E2');
+    const col = match[1].toUpperCase();
+    const rowIdx = parseInt(match[2], 10) - 1;
+    // Convert column letter(s) to index
+    let colIdx = 0;
+    for (let i = 0; i < col.length; i++) {
+      colIdx = colIdx * 26 + (col.charCodeAt(i) - 64);
+    }
+    colIdx--;
+    if (!rows[rowIdx]) throw new Error(`Row ${rowIdx + 1} not found in CSV`);
+    rows[rowIdx][colIdx] = value;
+    const newCsv = rows.map(r => r.join(',')).join('\n');
+    fs.writeFileSync(absPath, newCsv, 'utf-8');
+    console.log(`✅ Wrote value '${value}' to cell ${cell} in ${absPath}`);
+  } else {
+    throw new Error('Only .xlsx and .csv files are supported');
   }
 }

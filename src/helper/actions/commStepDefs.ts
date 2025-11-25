@@ -1,5 +1,4 @@
 import { Given, When, Then } from "@cucumber/cucumber";
-import { warn } from "winston";
 import { comm } from "@src/global";
 
 Given("Comm: Wait-In-Milli-Seconds -seconds: {param}", async function (seconds) {
@@ -50,4 +49,8 @@ Given("Comm: Attach-Log -message: {param} -mimeType: {param} -msgType: {param}",
 
 Given("Store -value: {param} in -variable: {param} -options: {param}", async function (value, varName, options) {
   await comm.storeValue(value, varName, options);
+});
+
+Given("Comm: Write-Data-To-Cell -filePath: {param} -sheetName: {param} -cellData: {param}", async function (filePath, sheetName, cellData) {
+  await comm.writeToExcelOrCsvFile(filePath, sheetName, cellData);
 });
