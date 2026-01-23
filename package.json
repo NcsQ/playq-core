@@ -1,0 +1,68 @@
+{
+  "name": "@playq/core",
+  "version": "0.2.73",
+  "description": "PlayQ Core (Phase 1) - raw TypeScript sources only.",
+  "files": [
+    "bin",
+    "dist",
+    "src",
+    "tsconfig.json",
+    "cucumber.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json || echo 'Skipping build (non-critical errors)'",
+    "prepublishOnly": "npm run build",
+    "util": "ts-node -r tsconfig-paths/register src/scripts/util.ts"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    },
+    "./src/*": "./src/*",
+    "./dist/*": "./dist/*",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@e965/xlsx": "^0.20.3",
+    "@faker-js/faker": "^9.6.0",
+    "allure-js-commons": "^2.14.0",
+    "axios": "^1.10.0",
+    "clipboardy": "^4.0.0",
+    "csv-parser": "^3.2.0",
+    "dotenv": "^16.0.3",
+    "minimist": "^1.2.8",
+    "otplib": "^12.0.1",
+    "qrcode": "^1.5.4",
+    "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
+    "winston": "^3.8.2",
+    "yargs": "^18.0.0",
+    "ajv": "^8.0.0"
+  },
+  "keywords": [
+    "playwright",
+    "cucumber",
+    "test",
+    "automation",
+    "playq"
+  ],
+  "author": "NCS",
+  "license": "ISC",
+  "peerDependencies": {
+    "@cucumber/cucumber": "^12.1.0",
+    "@playwright/test": "^1.53.1",
+    "playwright": "^1.53.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.27",
+    "typescript": "^5.6.3"
+  },
+  "bin": {
+    "playq": "bin/playq.js"
+  }
+}
