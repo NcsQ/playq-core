@@ -2,9 +2,11 @@ import { chromium, firefox, webkit } from "playwright";
 import type { LaunchOptions } from "playwright";
 import * as vars from "../bundle/vars";
 
-const options: LaunchOptions = {
-    headless: Boolean(vars.getConfigValue('browser.headless') ?? true)
-}
+const headlessConfig = vars.getConfigValue('browser.headless');
+const options = {
+    headless: headlessConfig === 'false' ? false : true
+};
+
 export const invokeBrowser = () => {
     const browserType = vars.getConfigValue('browser.browserType') || "chromium";
     switch (browserType) {
