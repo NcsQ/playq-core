@@ -3,7 +3,7 @@ import type { LaunchOptions } from "playwright";
 import * as vars from "../bundle/vars";
 
 const options: LaunchOptions = {
-    headless: !true
+    headless: Boolean(vars.getConfigValue('browser.headless') ?? true)
 }
 export const invokeBrowser = () => {
     const browserType = vars.getConfigValue('browser.browserType') || "chromium";
