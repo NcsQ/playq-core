@@ -21,6 +21,7 @@ import * as allure from "allure-js-commons";
 import path from "path";
 import fs from "fs";
 import { vars, comm } from "../../../global";
+import { test } from "@playwright/test"; 
 
 // Inline runner helpers
 function isPlaywrightRunner() { return process.env.TEST_RUNNER === 'playwright'; }
@@ -109,11 +110,14 @@ export async function callApi(action: string, config: string, baseUrl: string, o
     throw new Error("Base URL must be a non-empty string.");
   }
 
+  const stepName = `Api: Call api -action: ${action} -config: ${config} -baseUrl: ${baseUrl} -options: ${JSON.stringify(options_json)}`;
+
   if (isPlaywrightRunner()) {
-    await __allureAny_api.step(`Api: Call api -action: ${action} -config: ${config} -baseUrl: ${baseUrl} -options: ${JSON.stringify(options_json)}`,
-      async () => {
-        await doCallApi();
-      });
+    await test.step(stepName, async () => {
+      await __allureAny_api.step(stepName, async () => {
+          await doCallApi();
+        });
+    });
   } else {
     await doCallApi();
   }
