@@ -114,9 +114,7 @@ export async function callApi(action: string, config: string, baseUrl: string, o
 
   if (isPlaywrightRunner()) {
     await test.step(stepName, async () => {
-      await __allureAny_api.step(stepName, async () => {
-          await doCallApi();
-        });
+      await doCallApi();
     });
   } else {
     await doCallApi();

@@ -57,10 +57,8 @@ export async function verifyValue(actual: any, expected: string, options?: strin
   
   if (isPlaywrightRunner()) {
     await test.step(stepName, async () => {
-      await __allureAny_api.step(stepName, async () => {
-          await doVerifyValue();
-        });
-      });
+      await doVerifyValue();
+    });
   } else {
     await doVerifyValue();
   }
@@ -132,10 +130,7 @@ export async function verifyPathValue(path: string, expected: string, options?: 
 
   if (isPlaywrightRunner()) {
     await test.step(stepName, async () => {
-      await __allureAny_api.step(stepName, async () => {
-          await doVerifyPathValue();
-          // if (allureMsg) await allure.attachment(`${allureMsg}`, "", "text/plain");
-        });
+      await doVerifyPathValue();
     });
   } else {
     await doVerifyPathValue();
@@ -194,11 +189,7 @@ export async function getLastResponseJsonPathValue(path: string) {
 
   if (isPlaywrightRunner()) {
     return await test.step(stepName, async () => {
-      return await __allureAny_api.step(
-        stepName, async () => {
-          return await doGetLastResponseJsonPathValue();
-        }
-      );
+      return await doGetLastResponseJsonPathValue();
     });
   }
   return await doGetLastResponseJsonPathValue();
@@ -324,12 +315,7 @@ export async function storeLastResponseJsonPathsToVariables(pathVarString: strin
     await test.step(
       `Api: Store last response JSON paths to variables -paths: ${pathVarString} -vars: ${varKeyString}`,
       async () => {
-        await __allureAny_api.step(
-          `Api: Store last response JSON paths to variables -paths: ${pathVarString} -vars: ${varKeyString}`,
-          async () => {
-            await execute();
-          }
-        );
+        await execute();
       }
     );
   } else {
@@ -471,9 +457,7 @@ export async function getPathValueFromLastResponse(path: string, options?: strin
   const stepName = `Api: Get path value from last response -path: ${path} -options: ${JSON.stringify(options_json)}`;
   const run = async () => getPathValue(path, sources);
   if (isPlaywrightRunner()) { 
-    return await test.step(stepName, async () => {
-      return await __allureAny_api.step(stepName, run);
-    });
+    return await test.step(stepName, run);
   }
   return run();
 }
