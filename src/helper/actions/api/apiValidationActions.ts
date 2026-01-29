@@ -17,6 +17,7 @@
  */
 import * as allure from "allure-js-commons";
 import { vars, comm } from "../../../global";
+import { test } from "@playwright/test"; 
 
 // Inline runner helpers
 function isPlaywrightRunner() { return process.env.TEST_RUNNER === 'playwright'; }
@@ -52,11 +53,12 @@ export async function verifyValue(actual: any, expected: string, options?: strin
     throw new Error("Expected value must be provided for verification.");
   }
 
+  const stepName = `Api: Verify value -actual: ${resolvedActual} -expected: ${resolvedExpected} -options: ${JSON.stringify(options_json)}`;
+  
   if (isPlaywrightRunner()) {
-    await __allureAny_api.step(`Api: Verify value -actual: ${resolvedActual} -expected: ${resolvedExpected} -options: ${JSON.stringify(options_json)}`,
-      async () => {
-        await doVerifyValue();
-      });
+    await test.step(stepName, async () => {
+      await doVerifyValue();
+    });
   } else {
     await doVerifyValue();
   }
@@ -123,12 +125,13 @@ export async function verifyPathValue(path: string, expected: string, options?: 
 
   let actual: any;
   let allureMsg = ""
+
+  const stepName = `Api: Verify api path value in last response -path: ${path} -expected: ${resolvedExpected} -options: ${JSON.stringify(options_json)}`;
+
   if (isPlaywrightRunner()) {
-    await __allureAny_api.step(`Api: Verify api path value in last response -path: ${path} -expected: ${resolvedExpected} -options: ${JSON.stringify(options_json)}`,
-      async () => {
-        await doVerifyPathValue();
-        // if (allureMsg) await allure.attachment(`${allureMsg}`, "", "text/plain");
-      });
+    await test.step(stepName, async () => {
+      await doVerifyPathValue();
+    });
   } else {
     await doVerifyPathValue();
   }
@@ -182,13 +185,12 @@ export async function getLastResponseJsonPathValue(path: string) {
     throw new Error("Path must be a non-empty string for JSON path extraction.");
   }
 
+  const stepName = `Api: Get last response JSON path value -path: ${path}`;
+
   if (isPlaywrightRunner()) {
-    return await __allureAny_api.step(
-      `Api: Get last response JSON path value -path: ${path}`,
-      async () => {
-        return await doGetLastResponseJsonPathValue();
-      }
-    );
+    return await test.step(stepName, async () => {
+      return await doGetLastResponseJsonPathValue();
+    });
   }
   return await doGetLastResponseJsonPathValue();
 
@@ -310,7 +312,7 @@ export async function storeLastResponseJsonPathsToVariables(pathVarString: strin
   };
 
   if (isPlaywrightRunner()) {
-    await __allureAny_api.step(
+    await test.step(
       `Api: Store last response JSON paths to variables -paths: ${pathVarString} -vars: ${varKeyString}`,
       async () => {
         await execute();
@@ -454,7 +456,9 @@ export async function getPathValueFromLastResponse(path: string, options?: strin
   };
   const stepName = `Api: Get path value from last response -path: ${path} -options: ${JSON.stringify(options_json)}`;
   const run = async () => getPathValue(path, sources);
-  if (isPlaywrightRunner()) { return __allureAny_api.step(stepName, run); }
+  if (isPlaywrightRunner()) { 
+    return await test.step(stepName, run);
+  }
   return run();
 }
 
