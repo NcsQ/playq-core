@@ -53,6 +53,14 @@
   ],
   "author": "NCS",
   "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NcsQ/playq-core.git"
+  },
+  "homepage": "https://github.com/NcsQ/playq-core#readme",
+  "bugs": {
+    "url": "https://github.com/NcsQ/playq-core/issues"
+  },
   "peerDependencies": {
     "@cucumber/cucumber": "^12.1.0",
     "@playwright/test": "^1.53.1",
