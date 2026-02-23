@@ -342,3 +342,111 @@ export async function generateTotpTokenToVariable(
 export async function wait(ms: number) {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
+
+/**
+ * Comm: Process PowerShell Template -templateName: {param} -options: {param}
+ *
+ * Processes a PowerShell template file by replacing variables and optionally executing it.
+ *
+ * @param templateName - Name of the template file (without .ps1 extension)
+ * @param options - Optional string or object containing:
+ *   - source: [string] Source directory for templates (default: 'resources/powershell')
+ *   - dest: [string] Destination directory for processed files (default: './test-data')
+ *   - overrides: [object] Variable overrides as key-value pairs
+ *   - run: [boolean] Execute the script after processing (default: false)
+ *   - dryRun: [boolean] Preview without creating file (default: false)
+ *
+ * @example
+ * Comm: Process PowerShell Template -templateName: "db_setup" -options: '{"run": true}'
+ */
+export async function processPowerShellTemplate(templateName: string, options?: string | Record<string, any>): Promise<any> {
+  const { PsTemplateProcessor } = await import('../../util/powershell/psTemplateProcessor');
+  const options_json = typeof options === 'string' ? vars.parseLooseJson(options) : (options || {});
+
+  const processorOptions = {
+    source: options_json.source || 'resources/powershell',
+    dest: options_json.dest || 'test-data',
+    overrides: options_json.overrides || {},
+    run: options_json.run || false,
+    dryRun: options_json.dryRun || false,
+  };
+
+  const processor = new PsTemplateProcessor(processorOptions);
+  const result = await processor.process(templateName);
+
+  if (!result.success) {
+    throw new Error(`Failed to process template: ${result.error}`);
+  }
+
+  vars.setValue(`var.ps.lastOutput`, JSON.stringify(result));
+  return result;
+}
+
+/**
+ * Comm: Process PowerShell Template -templateName: {param} and store output in -variable: {param} -options: {param}
+ *
+ * Processes a PowerShell template and stores the output path in a variable.
+ *
+ * @param templateName - Name of the template file (without .ps1 extension)
+ * @param varName - Variable name to store the output file path
+ * @param options - Optional string or object (same as processPowerShellTemplate)
+ *
+ * @example
+ * Comm: Process PowerShell Template -templateName: "db_setup" and store output in -variable: "var.scriptPath" -options: '{}'
+ */
+export async function processPowerShellTemplateAndStore(
+  templateName: string,
+  varName: string,
+  options?: string | Record<string, any>
+): Promise<void> {
+  const result = await processPowerShellTemplate(templateName, options);
+  if (result.success && result.outputPath) {
+    vars.setValue(varName, result.outputPath);
+  } else {
+    throw new Error(`Failed to process PowerShell template: ${result.error}`);
+  }
+}
+
+/**
+ * Comm: Run PowerShell Script -scriptPath: {param} -options: {param}
+ *
+ * Executes a PowerShell script file.
+ *
+ * @param scriptPath - Path to the PowerShell script file
+ * @param options - Optional string or object (currently unused, reserved for future)
+ *
+ * @example
+ * Comm: Run PowerShell Script -scriptPath: "test-data/db_setup.ps1" -options: '{}'
+ */
+export async function runPowerShellScript(scriptPath: string, options?: string | Record<string, any>): Promise<number> {
+  const { execSync } = require('child_process');
+
+  if (!fs.existsSync(scriptPath)) {
+    throw new Error(`PowerShell script not found: ${scriptPath}`);
+  }
+
+  try {
+    if (isPlaywrightRunner()) {
+      await __allureAny_comm.step(`Comm: Run PowerShell Script -scriptPath: ${scriptPath}`, async () => {
+        console.log(`🚀 Executing PowerShell script: ${scriptPath}`);
+        const result = execSync(`powershell -NoProfile -ExecutionPolicy Bypass -File "${scriptPath}"`, {
+          encoding: 'utf-8',
+          stdio: 'inherit',
+        });
+        console.log(result);
+        return 0;
+      });
+    } else {
+      console.log(`🚀 Executing PowerShell script: ${scriptPath}`);
+      const result = execSync(`powershell -NoProfile -ExecutionPolicy Bypass -File "${scriptPath}"`, {
+        encoding: 'utf-8',
+        stdio: 'inherit',
+      });
+      console.log(result);
+    }
+
+    return 0;
+  } catch (error: any) {
+    throw new Error(`PowerShell execution failed: ${error.message}`);
+  }
+}
