@@ -70,3 +70,16 @@ Given("Comm: Wait -ms: {param}", async function (ms) {
   const value = parseInt(String(ms));
   await comm.wait(value);
 });
+
+// PowerShell Template Processing
+Given("Comm: Process PowerShell Template -templateName: {param} -options: {param}", async function (templateName, options) {
+  await comm.processPowerShellTemplate(templateName, options);
+});
+
+Given("Comm: Process PowerShell Template -templateName: {param} and store output in -variable: {param} -options: {param}", async function (templateName, varName, options) {
+  await comm.processPowerShellTemplateAndStore(templateName, varName, options);
+});
+
+Given("Comm: Run PowerShell Script -scriptPath: {param} -options: {param}", async function (scriptPath, options) {
+  await comm.runPowerShellScript(scriptPath, options);
+});

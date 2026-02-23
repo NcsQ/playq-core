@@ -361,7 +361,15 @@ export async function wait(ms: number) {
  */
 export async function processPowerShellTemplate(templateName: string, options?: string | Record<string, any>): Promise<any> {
   const { PsTemplateProcessor } = await import('../../util/powershell/psTemplateProcessor');
-  const options_json = typeof options === 'string' ? vars.parseLooseJson(options) : (options || {});
+  let options_json: any = {};
+
+  if (typeof options === 'string') {
+    // Unescape JSON string if it has escaped quotes
+    const unescapedOptions = options.replace(/\\"/g, '"');
+    options_json = vars.parseLooseJson(unescapedOptions);
+  } else {
+    options_json = options || {};
+  }
 
   const processorOptions = {
     source: options_json.source || 'resources/powershell',
