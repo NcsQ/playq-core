@@ -76,11 +76,57 @@ if (process.argv[2] === 'generate' && (process.argv.includes('--stepgroup') || p
 }
 
 
+// Handle 'rerun' command - reruns only failed tests from previous run
+if (process.argv[2] === 'rerun') {
+  const args = minimist(process.argv.slice(3), {
+    string: ['runner', 'env', 'key'],
+    alias: { r: 'runner', e: 'env', k: 'key' }
+  });
+
+  // Support --key or -k for PLAYQ_SECRET_KEY
+  if (args.key) process.env.PLAYQ_SECRET_KEY = args.key;
+
+  if (args.runner) process.env.PLAYQ_RUNNER = args.runner;
+  if (args.runner) process.env.TEST_RUNNER = args.runner;
+  if (args.env) process.env.PLAYQ_ENV = args.env;
+
+  // Set command to 'rerun' so runner knows to load and rerun failed tests
+  process.env.PLAYQ_COMMAND = 'rerun';
+
+  // Provide defaults
+  if (!process.env.PLAYQ_ENV) process.env.PLAYQ_ENV = 'default';
+  if (!process.env.PLAYQ_RUNNER) process.env.PLAYQ_RUNNER = 'playwright';
+  if (!process.env.TEST_RUNNER) process.env.TEST_RUNNER = process.env.PLAYQ_RUNNER;
+  process.env.PLAYQ_CORE_ROOT = path.join(__dirname, '../dist');
+  process.env.PLAYQ_PROJECT_ROOT = process.cwd();
+
+  if (args.help || args.h) {
+    console.log(`PlayQ CLI - Rerun Failed Tests
+Usage: playq rerun [options]
+
+  --runner      | -r   playwright | cucumber (default: playwright)
+  --env         | -e   Environment name (default: default)
+  --key         | -k   Secret key for crypto
+  --help        | -h   Show help
+
+Examples:
+  npx playq rerun                           # Rerun failed tests from last run
+  npx playq rerun --runner cucumber         # Rerun failed Cucumber scenarios
+  npx playq rerun --env staging             # Rerun with specific environment
+`);
+    process.exit(0);
+  }
+
+  const runnerJs = path.join(__dirname, '../dist/exec/runner.js');
+  require(runnerJs);
+}
+
 // Only run test runner if 'test' subcommand is provided
 if (process.argv[2] === 'test') {
 
   const args = minimist(process.argv.slice(3), {
     string: ['grep', 'tags', 'runner', 'project', 'env', 'filter', 'key'],
+    boolean: [],
     alias: { g: 'grep', t: 'tags', r: 'runner', p: 'project', e: 'env', f: 'filter', k: 'key' }
   });
 
@@ -119,16 +165,16 @@ if (process.argv[2] === 'test') {
   if (args.help || args.h) {
     console.log(`PlayQ CLI (Phase 1)
 Usage: playq test [options]
-  --grep   | -g   Playwright grep filter
-  --tags   | -t   Cucumber tag expression
-  --filter | -f   Universal filter (maps to grep/tags by runner)
-  --runner | -r   playwright | cucumber (default playwright)
-  --project| -p   Playwright project name
-  --env    | -e   Environment name (mapped to PLAYQ_ENV)
-  --key    | -k   Secret key for crypto (sets PLAYQ_SECRET_KEY)
+  --grep        | -g   Playwright grep filter
+  --tags        | -t   Cucumber tag expression
+  --filter      | -f   Universal filter (maps to grep/tags by runner)
+  --runner      | -r   playwright | cucumber (default playwright)
+  --project     | -p   Playwright project name
+  --env         | -e   Environment name (mapped to PLAYQ_ENV)
+  --key         | -k   Secret key for crypto (sets PLAYQ_SECRET_KEY)
 
-  --help   | -h   Show help
-  --version| -v   Show PlayQ CLI version  
+  --help        | -h   Show help
+  --version     | -v   Show PlayQ CLI version  
 
 Examples:
   npx playq test --filter "Registration001"
@@ -154,10 +200,12 @@ Usage: playq <command> [options]
 
 Commands:
   test                 Run PlayQ tests (Playwright or Cucumber)
+  rerun                Rerun only failed tests from previous run
   util                 Run the PlayQ utility
   generate --stepgroup | -sg   Generate step group cache and step defs
 
 For test options, run: npx playq test --help
+For rerun options, run: npx playq rerun --help
 For util options, run: npx playq util --help
 For version, run: npx playq --version or npx playq -v
 
@@ -166,6 +214,8 @@ Examples:
   npx playq test --filter "@smoke" --runner cucumber
   npx playq test --grep "Registration001"
   npx playq test --tags "@smoke" --runner cucumber
+  npx playq rerun
+  npx playq rerun --runner cucumber --env staging
   npx playq util
   npx playq util --help
   npx playq generate --stepgroup

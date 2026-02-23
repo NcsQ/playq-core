@@ -3,6 +3,9 @@ import minimist from 'minimist';
 import { loadEnv } from '../helper/bundle/env';
 import os from 'os';
 import path from 'path';
+import fs from 'fs';
+import { executeRerunWorkflow } from './rerunOrchestrator';
+import { extractFailedTests } from './rerunExtractor';
 // Note: remove stray invalid import; runner does not need faker
 
 // loadEnv();
@@ -13,6 +16,11 @@ import path from 'path';
 // console.log('  - Runner (PLAYQ_PROJECT):', process.env.PLAYQ_PROJECT );
 // console.log('  - Env (RUNNER - cc_card_type):', process.env['cc_card_type']);
 // console.log('  - Env (RUNNER - config.testExecution.timeout):', process.env['config.testExecution.timeout'] );
+
+// Check if this is a manual rerun command
+if (process.env.PLAYQ_COMMAND === 'rerun') {
+  handleManualRerun();
+}
 
 if (process.env.PLAYQ_RUNNER && process.env.PLAYQ_RUNNER === 'cucumber') {
   // Allow vars to initialize in the cucumber child process (do NOT set PLAYQ_NO_INIT_VARS here)
@@ -50,7 +58,9 @@ if (process.env.PLAYQ_RUNNER && process.env.PLAYQ_RUNNER === 'cucumber') {
     } catch (err) {
       console.log('ℹ️ Posttest check failed, continuing:', (err as any)?.message || err);
     }
-    process.exit(code);
+
+    // Always save failed tests for potential manual rerun
+    saveFailedTestsIfAny(code);
   });
 } else {
   if (process.env.PLAYQ_RUN_CONFIG) {
@@ -93,6 +103,9 @@ if (process.env.PLAYQ_RUNNER && process.env.PLAYQ_RUNNER === 'cucumber') {
       });
 
     }
+
+    // Always save failed tests for potential manual rerun
+    saveFailedTestsIfAny(0);
   } else {
   process.env.PLAYQ_NO_INIT_VARS = '1';
   loadEnv();
@@ -119,8 +132,105 @@ if (process.env.PLAYQ_RUNNER && process.env.PLAYQ_RUNNER === 'cucumber') {
       env: childEnv,
     });
 
+    // Always save failed tests for potential manual rerun
+    console.log(`\n📋 Test execution completed with exit code: ${result.status || 0}`);
+    saveFailedTestsIfAny(result.status || 0);
   }
 
+}
+
+/**
+ * Save failed tests from the current test run for potential manual rerun
+ * Always saves failures (if any) to `.playq-failed-tests.json`
+ */
+function saveFailedTestsIfAny(exitCode: number): void {
+  console.log(`🔍 [DEBUG] saveFailedTestsIfAny called with exit code: ${exitCode}`);
+  const projectRoot = process.cwd();
+  const runner = (process.env.PLAYQ_RUNNER || 'playwright') as 'playwright' | 'cucumber';
+  const reportDir = path.join(projectRoot, 'test-results');
+  const failedTestsFile = path.join(projectRoot, '.playq-failed-tests.json');
+
+  try {
+    // Extract failed tests from reports
+    console.log(`🔍 [DEBUG] Extracting failed tests from: ${reportDir}`);
+    const failedTests = extractFailedTests(reportDir, runner);
+    console.log(`🔍 [DEBUG] Found ${failedTests.length} failed tests`);
+
+    if (failedTests.length > 0) {
+      // Save failed tests to file
+      const failureData = {
+        runner,
+        timestamp: new Date().toISOString(),
+        exitCode,
+        count: failedTests.length,
+        tests: failedTests
+      };
+
+      fs.writeFileSync(failedTestsFile, JSON.stringify(failureData, null, 2));
+      console.log(`\n💾 Saved ${failedTests.length} failed test(s) to ${failedTestsFile}`);
+      console.log(`   Run 'npx playq rerun' to rerun only failed tests\n`);
+    } else if (fs.existsSync(failedTestsFile)) {
+      // Clean up old failure file if all tests passed
+      fs.unlinkSync(failedTestsFile);
+      console.log('✅ All tests passed - removed old failure file');
+    }
+  } catch (err) {
+    console.log('⚠️ Could not save failed tests:', (err as any)?.message || err);
+  }
+
+  process.exit(exitCode);
+}
+
+/**
+ * Handle manual rerun command: load previously failed tests and rerun them
+ */
+function handleManualRerun(): void {
+  const projectRoot = process.cwd();
+  const failedTestsFile = path.join(projectRoot, '.playq-failed-tests.json');
+
+  // Check if failed tests file exists
+  if (!fs.existsSync(failedTestsFile)) {
+    console.log('❌ No failed tests file found (.playq-failed-tests.json)');
+    console.log('   Run tests first to generate failed tests list.');
+    process.exit(1);
+  }
+
+  // Load failed tests
+  let failureData: any;
+  try {
+    const content = fs.readFileSync(failedTestsFile, 'utf-8');
+    failureData = JSON.parse(content);
+  } catch (err) {
+    console.log('❌ Could not read failed tests file:', (err as any)?.message || err);
+    process.exit(1);
+  }
+
+  console.log(`\n🔄 RERUN: Found ${failureData.count} failed test(s) from ${failureData.timestamp}`);
+  console.log(`   Runner: ${failureData.runner}\n`);
+
+  // Load environment (must happen before workflow)
+  loadEnv();
+
+  const runner = (process.env.PLAYQ_RUNNER || failureData.runner) as 'playwright' | 'cucumber';
+  const timestamp = new Date().getTime();
+
+  const rerunConfig = {
+    initialReportDir: path.join(projectRoot, 'test-results'),
+    rerunReportDir: path.join(projectRoot, `test-results-rerun-${timestamp}`),
+    mergedReportDir: path.join(projectRoot, `test-results-merged-${timestamp}`),
+    runner,
+    enableRerun: true
+  };
+
+  const rerunSuccess = executeRerunWorkflow(rerunConfig);
+
+  // Clean up failure file on successful rerun
+  if (rerunSuccess && fs.existsSync(failedTestsFile)) {
+    fs.unlinkSync(failedTestsFile);
+    console.log('\n✅ Rerun successful - removed failure file');
+  }
+
+  process.exit(rerunSuccess ? 0 : 1);
 }
 
 // console.log('  - Runner (PLAYQ_ENV):', process.env.PLAYQ_ENV );
