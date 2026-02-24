@@ -8,6 +8,23 @@ import { executeRerunWorkflow } from './rerunOrchestrator';
 import { extractFailedTests } from './rerunExtractor';
 // Note: remove stray invalid import; runner does not need faker
 
+/**
+ * Clean up test-results directory before running tests
+ */
+function cleanupTestResults(): void {
+  const projectRoot = process.cwd();
+  const testResultsDir = path.join(projectRoot, 'test-results');
+  
+  if (fs.existsSync(testResultsDir)) {
+    try {
+      fs.rmSync(testResultsDir, { recursive: true, force: true });
+      console.log('🧹 Cleaned up test-results directory');
+    } catch (error) {
+      console.log('⚠️ Failed to clean test-results:', (error as any)?.message || error);
+    }
+  }
+}
+
 // loadEnv();
 // console.log('  - Runner (PLAYQ_ENV):', process.env.PLAYQ_ENV );
 // console.log('  - Runner (PLAYQ_RUNNER):', process.env.PLAYQ_RUNNER );
@@ -31,6 +48,10 @@ if (process.env.PLAYQ_RUNNER && process.env.PLAYQ_RUNNER === 'cucumber') {
     process.env.PLAYQ__browser__browserType = 'chromium';
   }
   loadEnv();
+  
+  // Clean up test results before running
+  cleanupTestResults();
+
   const cucumberArgs = [
     'cucumber-js',
     '--config',
@@ -109,7 +130,11 @@ if (process.env.PLAYQ_RUNNER && process.env.PLAYQ_RUNNER === 'cucumber') {
   } else {
   process.env.PLAYQ_NO_INIT_VARS = '1';
   loadEnv();
-    const command = `npx playwright test --config=playq/config/playwright/playwright.config.js${process.env.PLAYQ_GREP ? ` --grep="${process.env.PLAYQ_GREP}"` : ''
+  
+  // Clean up test results before running
+  cleanupTestResults();
+
+  const command = `npx playwright test --config=playq/config/playwright/playwright.config.js${process.env.PLAYQ_GREP ? ` --grep="${process.env.PLAYQ_GREP}"` : ''
       }${process.env.PLAYQ_PROJECT ? ` --project="${process.env.PLAYQ_PROJECT}"` : ''}`;
 
   const childEnv = { ...process.env } as any;
