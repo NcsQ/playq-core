@@ -15,10 +15,10 @@ export function executePostTest() {
     } else {
     // PLAYWRIGHT RUNNER
     let allureSingleFile = (vars.getConfigValue('report.allure.singleFile') == 'true') ? '--single-file' : '';
-    execSync(`npx allure generate ${allureSingleFile} ./allure-results --output ./allure-report`, { stdio: 'inherit', cwd: path.resolve(__dirname, '../../') });
+    execSync(`npx allure generate ${allureSingleFile} ./test-results/allure-results --output ./test-results/allure-report`, { stdio: 'inherit', cwd: path.resolve(__dirname, '../../') });
     if (process.env.PLAYQ_REPORT_OPEN.toLowerCase() !== 'false' && vars.getConfigValue('testExecution.autoReportOpen') !== 'false') {
       console.log('- [INFO] Report open disabled using PLAYQ_REPORT_OPEN');
-      execSync('npx allure open ./allure-report', { stdio: 'inherit', cwd: path.resolve(__dirname, '../../') });
+      execSync('npx allure open ./test-results/allure-report', { stdio: 'inherit', cwd: path.resolve(__dirname, '../../') });
     }
    
 

@@ -186,12 +186,7 @@ function executePlaywrightRerun(): boolean {
     console.error('❌ Error executing Playwright rerun:', err);
     return false;
   }
-}
-  } catch (err) {
-    console.error('❌ Playwright rerun failed:', err);
-    return false;
   }
-}
 
 /**
  * Generate a summary report of the rerun
