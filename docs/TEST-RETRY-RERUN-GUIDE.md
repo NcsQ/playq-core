@@ -24,6 +24,8 @@ npx allure open test-results/allure-report
 
 ## Rerun Failed Tests
 
+### Playwright Tests
+
 ```bash
 # Rerun failures once
 npx playq rerun
@@ -35,7 +37,32 @@ npx playq rerun --attempts 3
 npx playq rerun --folder tests/playwright/actions/web
 ```
 
+### Cucumber Tests
+
+Cucumber uses the native `@rerun.txt` file to track and rerun failed scenarios:
+
+```bash
+# First run (generates @rerun.txt with failed scenarios)
+npx playq test --runner cucumber --tags "@forms" --env lambdatest
+
+# Rerun only failed scenarios from @rerun.txt
+npx cucumber-js --config cucumber.js "@rerun.txt"
+
+# Or use playq wrapper
+npx playq test --runner cucumber "@rerun.txt" --env lambdatest
+```
+
+**How Cucumber rerun works:**
+- First run: Cucumber generates `@rerun.txt` with failed scenario line numbers
+- Format: `tests/bdd/scenarios/forms.feature:8:13` (file:line:column)
+- Rerun command: Execute Cucumber with `@rerun.txt` as argument
+- Each rerun generates new `@rerun.txt` with any remaining failures
+
+---
+
 ## Merge Reports (After Rerun)
+
+### Playwright Reports
 
 The merge combines the original test run with the rerun results into a unified report.
 
@@ -53,7 +80,19 @@ npx playwright show-report test-results/playwright-report
 - Rerun creates new `test-results/blob-report/` with just rerun results
 - Merge combines both into unified `test-results/playwright-report/`
 
----
+### Cucumber Reports
+
+Cucumber JSON reports auto-merge when running tests:
+
+```bash
+# View Cucumber report (auto-merged with each run)
+start test-results/cucumber-report.html
+
+# Show merge summary
+npx playq merge-reports --runner cucumber
+```
+
+```
 
 ## Clean Up
 
@@ -67,13 +106,19 @@ Remove-Item -Recurse -Force test-results -ErrorAction SilentlyContinue
 
 **npx playq rerun:**
 - `--attempts N` - Number of rerun attempts (default: 1)
-- `--folder <path>` - Rerun specific folder only
+- `--folder <path>` - Rerun specific folder only (Playwright only)
 - `--env <name>` - Use specific environment
 - `--runner <type>` - `playwright` or `cucumber`
 
 **npx playq merge-reports:**
-- `--open` - Open report after merge
-- `--config <path>` - Custom merge config
+- `--runner <type>` - `playwright` | `cucumber` | `all` (default: all)
+- `--open` - Open Playwright report after merge
+- `--config <path>` - Custom Playwright merge config
+
+**Cucumber @rerun.txt:**
+- File is auto-generated after each run
+- Use with: `npx cucumber-js --config cucumber.js "@rerun.txt"`
+- Contains failed scenario line numbers
 
 ---
 
