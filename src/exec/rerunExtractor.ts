@@ -80,7 +80,7 @@ export function extractFailedTestsFromJunit(junitFile: string): FailedTest[] {
     const failureMatch = content.match(/<failure\s+message="([^"]+)"/g);
     
     if (failureMatch && failureMatch.length > 0) {
-      failureMatch.forEach((match) => {
+      failureMatch.forEach((match, idx) => {
         // Extract message like "fill.spec.ts:15:13 Fill alias: fill"
         const messageMatch = match.match(/message="([^"]+)"/);
         if (messageMatch) {

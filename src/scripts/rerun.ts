@@ -139,12 +139,27 @@ function runCucumberRerun(projectRoot: string, rerunFile: string, env?: string):
     fs.existsSync(nestedConfigPath) ? nestedConfigPath :
     fs.existsSync(rootConfigPath) ? rootConfigPath :
     nestedConfigPath;
-  const args = [cucumberJs, '--config', configPath, rerunFile];
+  
+  // Convert absolute paths to relative for cucumber-js (it runs from projectRoot cwd)
+  const relConfigPath = path.relative(projectRoot, configPath);
+  const relRerunPath = path.relative(projectRoot, rerunFile);
+  
+  const args = [cucumberJs, '--config', relConfigPath, relRerunPath];
   const envVars: NodeJS.ProcessEnv = { ...process.env };
   if (env) envVars.PLAYQ_ENV = env;
-  // Cleanup artifacts before rerun
-  removeDirSafe(path.join(projectRoot, 'test-results'));
+  envVars.PLAYQ_IS_RERUN = 'true';  // Signal to runner to preserve original results
+  
+  console.log(`📋 Rerun file: ${relRerunPath}`);
+  console.log(`⚙️  Config: ${relConfigPath}`);
+  console.log(`🎭 Running: npx ${args.join(' ')}`);
+  
+  // Selective cleanup: remove artifacts but preserve blob-report for merging
+  removeDirSafe(path.join(projectRoot, 'test-results/artifacts'));
+  removeDirSafe(path.join(projectRoot, 'test-results/cucumber-report.html'));
+  removeDirSafe(path.join(projectRoot, 'test-results/cucumber-report.json'));
+  
   const result = spawnSync('npx', args, { cwd: projectRoot, stdio: 'inherit', env: envVars });
+  console.log(`Exit code: ${result.status ?? 1}`);
   return result.status ?? 1;
 }
 
