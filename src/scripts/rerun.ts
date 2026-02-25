@@ -159,8 +159,9 @@ function runCucumberRerun(projectRoot: string, rerunFile: string, env?: string):
     return 0;
   }
   
-  // Build arguments: cucumber-js --config <path> <scenario1> <scenario2> ...
-  const args = [cucumberJs, '--config', relConfigPath, ...scenarioPaths];
+  // Build arguments with explicit 'default:' profile override to skip config paths
+  // This ensures cucumber-js ONLY runs the scenario paths we specify, not all features
+  const args = [cucumberJs, '--config', relConfigPath, '--profile', 'rerun', ...scenarioPaths];
   const envVars: NodeJS.ProcessEnv = { ...process.env };
   if (env) envVars.PLAYQ_ENV = env;
   envVars.PLAYQ_IS_RERUN = 'true';  // Signal to runner to preserve original results
