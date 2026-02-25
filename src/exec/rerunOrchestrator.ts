@@ -132,31 +132,16 @@ function executeCucumberRerun(): boolean {
     }
 
     console.log(`\n🧪 Running Cucumber rerun...`);
-    const env = { ...process.env, PLAYQ_RUNNER: 'cucumber', PLAYQ_IS_RERUN: 'true' };
-
-    // Resolve correct config path: prefer nested, fallback to root
-    const nestedConfigPath = path.join(projectRoot, 'playq', 'config', 'cucumber', 'cucumber.js');
-    const rootConfigPath = path.join(projectRoot, 'cucumber.js');
-    const configPath =
-      fs.existsSync(nestedConfigPath) ? nestedConfigPath :
-      fs.existsSync(rootConfigPath) ? rootConfigPath :
-      nestedConfigPath;
-    
-    // Convert to relative paths for cucumber-js
-    const relConfigPath = path.relative(projectRoot, configPath);
-    const relRerunPath = path.relative(projectRoot, rerunFile);
-
-    console.log(`📋 Rerun file: ${relRerunPath}`);
-    console.log(`⚙️  Config: ${relConfigPath}`);
-    console.log(`🎭 Running: npx cucumber-js --config ${relConfigPath} ${relRerunPath}`);
+    const env = { ...process.env, PLAYQ_RUNNER: 'cucumber' };
 
     const result = spawnSync('npx', [
       'cucumber-js',
       '--config',
-      relConfigPath,
-      relRerunPath
+      'cucumber.js',
+      '--profile',
+      'default',
+      '@rerun.txt'
     ], {
-      cwd: projectRoot,
       stdio: 'inherit',
       env,
       shell: false

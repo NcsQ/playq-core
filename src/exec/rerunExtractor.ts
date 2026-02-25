@@ -129,7 +129,8 @@ export function extractFailedCucumberTests(cucumberReportFile: string): FailedTe
           if (hasFailed || scenario.status === 'failed') {
             // For rerun, extract feature URI in format: path/to/feature.feature:line
             // This is the format expected by cucumber-js rerun plugin
-            const featureUri = feature.uri || feature.name || 'unknown';
+            // IMPORTANT: Normalize to forward slashes for cross-platform compatibility
+            const featureUri = (feature.uri || feature.name || 'unknown').replace(/\\/g, '/');
             const line = scenario.line || 0;
             const rerunIdentifier = `${featureUri}:${line}`;
             
@@ -247,8 +248,9 @@ export function createCucumberRerunFile(failedTests: FailedTest[], outputPath: s
   try {
     const cucumberFailed = failedTests.filter(t => t.type === 'cucumber');
     // Extract feature:line format identifiers (not tags)
+    // IMPORTANT: Normalize paths to forward slashes for cross-platform cucumber-js compatibility
     const rerunLines = cucumberFailed
-      .map(t => t.identifier)
+      .map(t => t.identifier.replace(/\\/g, '/')) // Convert backslashes to forward slashes
       .filter((v, i, a) => a.indexOf(v) === i); // Deduplicate
 
     if (rerunLines.length === 0) {
