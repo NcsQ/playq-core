@@ -49,7 +49,7 @@ export function mergeBlobReports(initialDir: string, rerunDir: string, outputDir
               testTitleMap.set(json.title, { 
                 ...json, 
                 source: reportFile.includes(rerunDir) ? 'rerun' : 'initial',
-                ok: json.ok || testTitleMap.get(json.title)?.ok 
+                ok: json.ok ?? testTitleMap.get(json.title)?.ok 
               });
             } else {
               mergedLines.push(json);

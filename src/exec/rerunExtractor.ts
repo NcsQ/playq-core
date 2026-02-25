@@ -127,12 +127,16 @@ export function extractFailedCucumberTests(cucumberReportFile: string): FailedTe
           // Check if scenario failed
           const hasFailed = scenario.steps?.some((step: any) => step.result?.status === 'failed');
           if (hasFailed || scenario.status === 'failed') {
-            // Extract tags for identification
-            const tags = scenario.tags?.map((t: any) => t.name).join('||') || '';
+            // For rerun, extract feature URI in format: path/to/feature.feature:line
+            // This is the format expected by cucumber-js rerun plugin
+            const featureUri = feature.uri || feature.name || 'unknown';
+            const line = scenario.line || 0;
+            const rerunIdentifier = `${featureUri}:${line}`;
+            
             failed.push({
               name: `${feature.name}::${scenario.name}`,
               type: 'cucumber',
-              identifier: tags || scenario.name // Use tags if available, else scenario name
+              identifier: rerunIdentifier // Feature URI:line format for cucumber rerun
             });
           }
         });
@@ -203,13 +207,18 @@ export function extractFailedTests(reportDir: string, runner: 'playwright' | 'cu
     }
   }
 
-  // SECONDARY: Extract from Playwright blob reports (if available and no junit)
+  // SECONDARY: Extract from Playwright blob reports (fallback when junit not found)
   if (runner === 'playwright' || runner === 'both') {
     const blobDir = path.join(reportDir, 'blob-report');
     if (fs.existsSync(blobDir)) {
       console.log('  Extracting from blob reports...');
       const failed = extractFailedPlaywrightTests(blobDir);
-      failed.forEach(t => uniqueTests.set(t.identifier, t));
+      // Only set blob-derived entries if not already present from junit (do not overwrite)
+      failed.forEach(t => {
+        if (!uniqueTests.has(t.identifier)) {
+          uniqueTests.set(t.identifier, t);
+        }
+      });
     }
   }
 
@@ -237,22 +246,22 @@ export function extractFailedTests(reportDir: string, runner: 'playwright' | 'cu
 export function createCucumberRerunFile(failedTests: FailedTest[], outputPath: string): void {
   try {
     const cucumberFailed = failedTests.filter(t => t.type === 'cucumber');
-    const tags = cucumberFailed
-      .filter(t => t.identifier.includes('@'))
+    // Extract feature:line format identifiers (not tags)
+    const rerunLines = cucumberFailed
       .map(t => t.identifier)
       .filter((v, i, a) => a.indexOf(v) === i); // Deduplicate
 
-    if (tags.length === 0) {
-      console.log('⚠️ No Cucumber tags found for rerun');
+    if (rerunLines.length === 0) {
+      console.log('⚠️ No Cucumber scenarios found for rerun');
       return;
     }
 
-    // Create rerun file with tags
-    const content = tags.join('\n');
+    // Create rerun file with feature:line format (expected by cucumber-js rerun plugin)
+    const content = rerunLines.join('\n');
     fs.mkdirSync(path.dirname(outputPath), { recursive: true });
     fs.writeFileSync(outputPath, content, 'utf-8');
 
-    console.log(`✅ Cucumber rerun file created: ${outputPath}`);
+    console.log(`✅ Cucumber rerun file created: ${outputPath}`)
   } catch (err) {
     console.error('❌ Error creating Cucumber rerun file:', err);
   }

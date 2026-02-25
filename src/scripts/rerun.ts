@@ -158,12 +158,43 @@ function runCucumberRerun(projectRoot: string, rerunFile: string, env?: string):
   return result.status ?? 1;
 }
 
+function printHelp() {
+  console.log(`
+Usage: npx playq rerun [options]
+
+Rerun failed tests from the previous test run.
+
+Options:
+  --runner, -r <type>    Test runner to use ("playwright" or "cucumber")
+                         Default: "playwright"
+  --env, -e <name>       Environment name (passed as PLAYQ_ENV)
+                         Default: "default"
+  --file, -f <path>      Path to a custom rerun file (one test per line)
+  --folder <path>        Folder filter for rerun (Playwright only)
+  --project, -p <name>   Playwright project name
+  --attempts, -a <num>   Number of rerun attempts
+                         Default: 1
+  --help, -h             Show this help message and exit
+
+Examples:
+  npx playq rerun
+  npx playq rerun --runner cucumber --env staging
+  npx playq rerun --attempts 3
+`);
+}
+
 function main() {
   const argv = minimist(process.argv.slice(2), {
     string: ['runner', 'env', 'file', 'project', 'folder'],
-    alias: { r: 'runner', e: 'env', f: 'file', a: 'attempts', p: 'project' },
+    boolean: ['help'],
+    alias: { r: 'runner', e: 'env', f: 'file', a: 'attempts', p: 'project', h: 'help' },
     default: { attempts: 1 }
   });
+
+  if (argv.help) {
+    printHelp();
+    return;
+  }
   const attempts = Number(argv.attempts) || 1;
   const runner = argv.runner || 'playwright';
   const projectRoot = process.cwd();

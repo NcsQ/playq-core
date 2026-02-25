@@ -144,7 +144,7 @@ function executeCucumberRerun(): boolean {
     ], {
       stdio: 'inherit',
       env,
-      shell: true
+      shell: false
     });
 
     if (result.error) {
@@ -208,7 +208,7 @@ function executePlaywrightRerun(): boolean {
       `--grep=${combinedPattern}`
     ], {
       stdio: 'inherit',
-      shell: true
+      shell: false
     });
 
     if (result.error) {
