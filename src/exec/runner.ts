@@ -5,7 +5,7 @@ import os from 'os';
 import path from 'path';
 import fs from 'fs';
 import { executeRerunWorkflow } from './rerunOrchestrator';
-import { extractFailedTests } from './rerunExtractor';
+import { extractFailedTests, createCucumberRerunFile, createPlaywrightRerunFile } from './rerunExtractor';
 // Note: remove stray invalid import; runner does not need faker
 
 /**
@@ -180,7 +180,7 @@ if (process.env.PLAYQ_RUNNER && process.env.PLAYQ_RUNNER === 'cucumber') {
 
 /**
  * Save failed tests from the current test run for potential manual rerun
- * Always saves failures (if any) to `.playq-failed-tests.json`
+ * Creates both .playq-failed-tests.json (for npx playq rerun) and @rerun.txt/@rerun.pw (for direct cucumber-js/playwright-cli)
  */
 function saveFailedTestsIfAny(exitCode: number): void {
   const debug = process.env.PLAYQ_DEBUG === 'true';
@@ -197,7 +197,7 @@ function saveFailedTestsIfAny(exitCode: number): void {
     if (debug) console.log(`🔍 [DEBUG] Found ${failedTests.length} failed tests`);
 
     if (failedTests.length > 0) {
-      // Save failed tests to file
+      // Save failed tests metadata to .playq-failed-tests.json
       const failureData = {
         runner,
         timestamp: new Date().toISOString(),
@@ -208,11 +208,29 @@ function saveFailedTestsIfAny(exitCode: number): void {
 
       fs.writeFileSync(failedTestsFile, JSON.stringify(failureData, null, 2));
       console.log(`\n💾 Saved ${failedTests.length} failed test(s) to ${failedTestsFile}`);
+
+      // Create rerun files for direct test runner invocation
+      if (runner === 'cucumber') {
+        const cucumberRerunFile = path.join(projectRoot, '@rerun.txt');
+        createCucumberRerunFile(failedTests, cucumberRerunFile);
+        console.log(`   Created ${cucumberRerunFile} (for direct cucumber-js invocation)`);
+      }
+      if (runner === 'playwright') {
+        const playwrightRerunFile = path.join(projectRoot, '.playwright-rerun');
+        createPlaywrightRerunFile(failedTests, playwrightRerunFile);
+        console.log(`   Created ${playwrightRerunFile} (for direct playwright invocation)`);
+      }
+
       console.log(`   Run 'npx playq rerun' to rerun only failed tests\n`);
     } else if (fs.existsSync(failedTestsFile)) {
       // Clean up old failure file if all tests passed
       fs.unlinkSync(failedTestsFile);
-      console.log('✅ All tests passed - removed old failure file');
+      // Also clean up old rerun files
+      const cucumberRerunFile = path.join(projectRoot, '@rerun.txt');
+      const playwrightRerunFile = path.join(projectRoot, '.playwright-rerun');
+      if (fs.existsSync(cucumberRerunFile)) fs.unlinkSync(cucumberRerunFile);
+      if (fs.existsSync(playwrightRerunFile)) fs.unlinkSync(playwrightRerunFile);
+      console.log('✅ All tests passed - removed old failure files');
     }
   } catch (err) {
     console.log('⚠️ Could not save failed tests:', (err as any)?.message || err);
