@@ -136,15 +136,37 @@ function runCucumberRerun(projectRoot: string, rerunFile: string, env?: string):
     nestedConfigPath;
   
   // Convert absolute paths to relative for cucumber-js (it runs from projectRoot cwd)
-  const relConfigPath = path.relative(projectRoot, configPath);
-  const relRerunPath = path.relative(projectRoot, rerunFile);
+  // Normalize to forward slashes for cucumber-js cross-platform compatibility
+  const relConfigPath = path.relative(projectRoot, configPath).replace(/\\/g, '/');
   
-  const args = [cucumberJs, '--config', relConfigPath, relRerunPath];
+  // Read @rerun.txt and extract scenario paths (one per line, e.g., _Temp/execution/forms.feature:8)
+  let scenarioPaths: string[] = [];
+  if (fs.existsSync(rerunFile)) {
+    const content = fs.readFileSync(rerunFile, 'utf-8').trim();
+    if (content) {
+      // Each line is a scenario path like: _Temp/execution/forms.feature:8
+      scenarioPaths = content
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 0)
+        .map(line => line.replace(/\\/g, '/'));  // Normalize backslashes to forward slashes
+    }
+  }
+  
+  // If no scenarios found, skip rerun
+  if (scenarioPaths.length === 0) {
+    console.log('📋 No scenarios found in rerun file.');
+    return 0;
+  }
+  
+  // Build arguments: cucumber-js --config <path> <scenario1> <scenario2> ...
+  const args = [cucumberJs, '--config', relConfigPath, ...scenarioPaths];
   const envVars: NodeJS.ProcessEnv = { ...process.env };
   if (env) envVars.PLAYQ_ENV = env;
   envVars.PLAYQ_IS_RERUN = 'true';  // Signal to runner to preserve original results
   
-  console.log(`📋 Rerun file: ${relRerunPath}`);
+  console.log(`📋 Rerun file: ${path.relative(projectRoot, rerunFile)}`);
+  console.log(`📊 Scenarios to rerun: ${scenarioPaths.length}`);
   console.log(`⚙️  Config: ${relConfigPath}`);
   console.log(`🎭 Running: npx ${args.join(' ')}`);
   
