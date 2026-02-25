@@ -12,6 +12,12 @@ import { extractFailedTests } from './rerunExtractor';
  * Clean up test-results directory before running tests
  */
 function cleanupTestResults(): void {
+  // Skip cleanup during rerun operations - we need to preserve original results
+  if (process.env.PLAYQ_IS_RERUN === 'true') {
+    console.log('ℹ️  Skipping cleanup (rerun in progress)');
+    return;
+  }
+
   const projectRoot = process.cwd();
   const testResultsDir = path.join(projectRoot, 'test-results');
   

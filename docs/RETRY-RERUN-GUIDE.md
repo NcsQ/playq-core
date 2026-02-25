@@ -6,7 +6,10 @@
 npx playq test --runner playwright --env lambdatest
 npx playq test --runner cucumber --tags "@scenario_tag" --env lambdatest
 ```
-
+Example:
+```bash
+ npx playq test --grep "fill" --env default
+```
 ## Rerun Failed Tests
 
 ### Playwright
@@ -17,11 +20,14 @@ npx playq rerun --attempts 3
 
 ### Cucumber
 ```bash
-# Rerun failed scenarios from @rerun.txt
-npx cucumber-js --config cucumber.js "@rerun.txt"
+# Rerun failed scenarios (preserves original results for merging)
+npx playq rerun --runner cucumber
 
-# Or with playq wrapper
-npx playq test --runner cucumber "@rerun.txt" --env lambdatest
+# With environment and attempts
+npx playq rerun --runner cucumber --env lambdatest --attempts 3
+
+# Manual rerun using raw cucumber-js (use with caution - clears test-results)
+npx cucumber-js --config cucumber.js "@rerun.txt"
 ```
 
 ## Merge Reports
