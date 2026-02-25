@@ -28,9 +28,14 @@ function findBlobReportDirs(projectRoot: string): string[] {
     'test-results/blob-report_combined'
   ];
   
+  console.log(`🔍 Searching for blob report directories in ${projectRoot}...`);
   for (const candidate of candidates) {
     const dirPath = path.join(projectRoot, candidate);
-    if (fs.existsSync(dirPath) && fs.statSync(dirPath).isDirectory()) {
+    const exists = fs.existsSync(dirPath);
+    const isDir = exists && fs.statSync(dirPath).isDirectory();
+    console.log(`   ${candidate}: ${isDir ? '✓ FOUND' : '✗ not found'}`);
+    
+    if (isDir) {
       dirs.push(dirPath);
     }
   }
@@ -72,10 +77,14 @@ function collectBlobFiles(dirs: string[]): string[] {
   for (const dir of dirs) {
     try {
       const entries = fs.readdirSync(dir);
+      console.log(`   Directory ${path.basename(dir)}: ${entries.length} entries`);
+      
       for (const entry of entries) {
         // Playwright blob reports are typically named report-*.jsonl or report-*.zip
         if (entry.startsWith('report-') && (entry.endsWith('.jsonl') || entry.endsWith('.zip'))) {
-          blobFiles.push(path.join(dir, entry));
+          const filePath = path.join(dir, entry);
+          blobFiles.push(filePath);
+          console.log(`      ✓ ${entry}`);
         }
       }
     } catch (err) {
@@ -227,7 +236,8 @@ Examples:
         const result = spawnSync('npx', args_array, { 
           cwd: projectRoot, 
           stdio: 'inherit',
-          env: { ...process.env }
+          env: { ...process.env },
+          shell: true
         });
         
         if (result.error) {
@@ -255,7 +265,8 @@ Examples:
           const openResult = spawnSync('npx', openArgs, { 
             cwd: projectRoot, 
             stdio: 'inherit',
-            env: { ...process.env }
+            env: { ...process.env },
+            shell: true
           });
           
           // Exit code 130 is normal (user closed the viewer)

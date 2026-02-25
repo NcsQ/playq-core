@@ -114,7 +114,7 @@ function runPlaywrightGrep(projectRoot: string, files: string[], env?: string, p
     console.log(`🎭 Running: npx ${args.join(' ')}`);
     
     const envVars: NodeJS.ProcessEnv = { ...process.env, PLAYQ_ENV: env || 'default', PLAYQ_IS_RERUN: 'true' };
-    const result = spawnSync('npx', args, { cwd: projectRoot, stdio: 'inherit', env: envVars });
+    const result = spawnSync('npx', args, { cwd: projectRoot, stdio: 'inherit', env: envVars, shell: true });
     console.log(`   Exit code: ${result.status ?? 1}`);
     if (result.error) {
       console.error(`   Error: ${result.error.message}`);
@@ -159,9 +159,9 @@ function runCucumberRerun(projectRoot: string, rerunFile: string, env?: string):
     return 0;
   }
   
-  // Build arguments with explicit 'default:' profile override to skip config paths
-  // This ensures cucumber-js ONLY runs the scenario paths we specify, not all features
-  const args = [cucumberJs, '--config', relConfigPath, '--profile', 'rerun', ...scenarioPaths];
+  // Build arguments: use default profile with scenario paths
+  // Scenario paths specified as CLI args take precedence over paths in config
+  const args = [cucumberJs, '--config', relConfigPath, ...scenarioPaths];
   const envVars: NodeJS.ProcessEnv = { ...process.env };
   if (env) envVars.PLAYQ_ENV = env;
   envVars.PLAYQ_IS_RERUN = 'true';  // Signal to runner to preserve original results
@@ -176,7 +176,7 @@ function runCucumberRerun(projectRoot: string, rerunFile: string, env?: string):
   removeDirSafe(path.join(projectRoot, 'test-results/cucumber-report.html'));
   removeDirSafe(path.join(projectRoot, 'test-results/cucumber-report.json'));
   
-  const result = spawnSync('npx', args, { cwd: projectRoot, stdio: 'inherit', env: envVars });
+  const result = spawnSync('npx', args, { cwd: projectRoot, stdio: 'inherit', env: envVars, shell: true });
   console.log(`Exit code: ${result.status ?? 1}`);
   return result.status ?? 1;
 }
@@ -219,9 +219,26 @@ function main() {
     return;
   }
   const attempts = Number(argv.attempts) || 1;
-  const runner = argv.runner || 'playwright';
   const projectRoot = process.cwd();
   const env = argv.env || 'default';
+  
+  // AUTO-DETECT RUNNER if not specified
+  let runner = argv.runner;
+  if (!runner) {
+    const cucumberRerunFile = path.join(projectRoot, '@rerun.txt');
+    const playwrightReportJson = path.join(projectRoot, 'test-results/playwright-report/playwright-report.json');
+    
+    if (fs.existsSync(cucumberRerunFile)) {
+      runner = 'cucumber';
+      console.log('🔍 Auto-detected runner: cucumber (found @rerun.txt)');
+    } else if (fs.existsSync(playwrightReportJson)) {
+      runner = 'playwright';
+      console.log('🔍 Auto-detected runner: playwright (found playwright-report.json)');
+    } else {
+      runner = 'playwright'; // fallback
+      console.log('⚠️  No rerun artifacts found, defaulting to playwright');
+    }
+  }
   const project = argv.project;
   const fileArg = argv.file as string | undefined;
   const folderArg = argv.folder as string | undefined;

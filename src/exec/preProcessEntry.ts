@@ -21,9 +21,41 @@ console.log(`⚙️ Force flag: ${isForce}`);
 
 generateStepGroupsIfNeeded(isForce);
 
-const featureFiles = sync('test/features/**/*.feature');
+// RERUN MODE: Only preprocess features mentioned in @rerun.txt
+let featureFiles: string[] = [];
+const isRerun = process.env.PLAYQ_IS_RERUN === 'true';
+
+if (isRerun) {
+  console.log('ℹ️  RERUN MODE: Only preprocessing features from @rerun.txt');
+  const rerunFile = path.join(process.env.PLAYQ_PROJECT_ROOT || process.cwd(), '@rerun.txt');
+  
+  if (fs.existsSync(rerunFile)) {
+    const rerunContent = fs.readFileSync(rerunFile, 'utf-8');
+    const scenarioPaths = rerunContent.split('\n').map(l => l.trim()).filter(Boolean);
+    
+    // Extract unique feature file paths from scenario paths (e.g., "_Temp/execution/forms.feature:8" -> "test/features/forms.feature")
+    const uniqueFeatures = new Set<string>();
+    scenarioPaths.forEach(scenarioPath => {
+      // Remove line number: "_Temp/execution/forms.feature:8" -> "_Temp/execution/forms.feature"
+      const featurePath = scenarioPath.split(':')[0];
+      // Convert from _Temp/execution back to test/features
+      const originalPath = featurePath.replace('_Temp/execution/', 'test/features/');
+      uniqueFeatures.add(originalPath);
+    });
+    
+    featureFiles = Array.from(uniqueFeatures);
+    console.log(`📋 Found ${featureFiles.length} feature(s) to preprocess: ${featureFiles.join(', ')}`);
+  } else {
+    console.warn('⚠️  @rerun.txt not found, preprocessing all features');
+    featureFiles = sync('test/features/**/*.feature');
+  }
+} else {
+  // FRESH RUN: Process all features
+  featureFiles = sync('test/features/**/*.feature');
+}
+
 if (!featureFiles.length) {
-  console.warn('⚠️ No feature files found under features/**/*.feature');
+  console.warn('⚠️ No feature files found to preprocess');
 }
 
 // Clean up execution folder before generating new feature files

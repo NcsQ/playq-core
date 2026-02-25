@@ -4,7 +4,6 @@ import { loadEnv } from '../helper/bundle/env';
 import os from 'os';
 import path from 'path';
 import fs from 'fs';
-import { executeRerunWorkflow } from './rerunOrchestrator';
 import { extractFailedTests, createCucumberRerunFile, createPlaywrightRerunFile } from './rerunExtractor';
 // Note: remove stray invalid import; runner does not need faker
 
@@ -44,11 +43,28 @@ if (process.env.PLAYQ_RUNNER && process.env.PLAYQ_RUNNER === 'cucumber') {
   // Allow vars to initialize in the cucumber child process (do NOT set PLAYQ_NO_INIT_VARS here)
   // Ensure legacy TEST_RUNNER flag used by helper code is set
   process.env.TEST_RUNNER = 'cucumber';
+  
+  // LOG FOR DEBUGGING TAG FILTERING
+  console.log(`🔍 Cucumber block: PLAYQ_TAGS = "${process.env.PLAYQ_TAGS}", PLAYQ_RUNNER = "${process.env.PLAYQ_RUNNER}"`);
+  
+  // PRESERVE CLI-SET ENVIRONMENT VARIABLES BEFORE loadEnv() potentially overwrites them
+  const cliTags = process.env.PLAYQ_TAGS;
+  console.log(`💾 Saved cliTags = "${cliTags}"`);
+  const cliGrep = process.env.PLAYQ_GREP;
+  const cliEnv = process.env.PLAYQ_ENV;
+  const cliProject = process.env.PLAYQ_PROJECT;
+  
   // Provide a default browser type if none supplied via config/env
   if (!process.env['PLAYQ__browser__browserType'] && !process.env['browser.browserType']) {
     process.env.PLAYQ__browser__browserType = 'chromium';
   }
   loadEnv();
+  
+  // RESTORE CLI-SET ENV VARS after loadEnv() in case they were lost
+  if (cliTags) process.env.PLAYQ_TAGS = cliTags;
+  if (cliGrep) process.env.PLAYQ_GREP = cliGrep;
+  if (cliEnv && !process.env.PLAYQ_ENV) process.env.PLAYQ_ENV = cliEnv;
+  if (cliProject && !process.env.PLAYQ_PROJECT) process.env.PLAYQ_PROJECT = cliProject;
   
   // Clean up test results before running
   cleanupTestResults();
@@ -60,8 +76,18 @@ if (process.env.PLAYQ_RUNNER && process.env.PLAYQ_RUNNER === 'cucumber') {
     '--profile',
     'default',
   ];
-  if (process.env.PLAYQ_TAGS) cucumberArgs.push('--tags', process.env.PLAYQ_TAGS);
+  
+  // Add tags if present (from CLI or environment)
+  const tagsToUse = process.env.PLAYQ_TAGS || cliTags;
+  if (tagsToUse) {
+    cucumberArgs.push('--tags', tagsToUse);
+    console.log(`📝 Using tags: ${tagsToUse}`);
+  } else {
+    console.log(`📝 No tags specified - running all scenarios`);
+  }
 
+  console.log(`🎭 Running Cucumber: npx ${cucumberArgs.join(' ')}`);
+  
   const run = spawn('npx', cucumberArgs, {
     stdio: 'inherit',
     env: { ...process.env },

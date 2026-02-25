@@ -74,6 +74,23 @@ export function extractFailedTestsFromJunit(junitFile: string): FailedTest[] {
   const failed: FailedTest[] = [];
 
   try {
+    // SAFEGUARD: Verify file exists and was recently modified
+    // This prevents picking up old junit files from previous test runs
+    if (!fs.existsSync(junitFile)) {
+      return failed;
+    }
+    
+    const stats = fs.statSync(junitFile);
+    const fileAgeMs = Date.now() - stats.mtimeMs;
+    const fileAgeMinutes = Math.round(fileAgeMs / 60000);
+    
+    // Only use junit file if it was modified within the last 5 minutes
+    // This ensures we're reading results from the current test run, not old ones
+    if (fileAgeMs > 5 * 60 * 1000) {
+      console.warn(`⚠️  Skipping OLD junit file (modified ${fileAgeMinutes} minutes ago) - run fresh tests first`);
+      return failed;
+    }
+    
     const content = fs.readFileSync(junitFile, 'utf-8');
     
     // Parse failure elements: <failure message="fill.spec.ts:15:13 Fill alias: fill" type="FAILURE">
@@ -114,6 +131,19 @@ export function extractFailedCucumberTests(cucumberReportFile: string): FailedTe
 
   try {
     if (!fs.existsSync(cucumberReportFile)) {
+      return failed;
+    }
+
+    // SAFEGUARD: Verify report file was recently modified
+    // This prevents picking up old cucumber reports from previous test runs
+    const stats = fs.statSync(cucumberReportFile);
+    const fileAgeMs = Date.now() - stats.mtimeMs;
+    const fileAgeMinutes = Math.round(fileAgeMs / 60000);
+    
+    // Only use report if it was modified within the last 5 minutes
+    // This ensures we're reading results from the current test run, not old ones
+    if (fileAgeMs > 5 * 60 * 1000) {
+      console.warn(`⚠️  Skipping OLD Cucumber report (modified ${fileAgeMinutes} minutes ago) - run fresh tests first`);
       return failed;
     }
 

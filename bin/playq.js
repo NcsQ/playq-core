@@ -95,11 +95,26 @@ if (process.argv[2] === 'merge-reports') {
 // Only run test runner if 'test' subcommand is provided
 if (process.argv[2] === 'test') {
 
+  // DEBUG: Show raw process.argv
+  console.log(`🔍 RAW process.argv from shell: ${JSON.stringify(process.argv)}`);
+
   const args = minimist(process.argv.slice(3), {
     string: ['grep', 'tags', 'runner', 'project', 'env', 'filter', 'key'],
     boolean: [],
     alias: { g: 'grep', t: 'tags', r: 'runner', p: 'project', e: 'env', f: 'filter', k: 'key' }
   });
+
+  // DEBUG: Log what minimist parsed
+  console.log(`🔍 CLI parsed: tags="${args.tags}", grep="${args.grep}", runner="${args.runner}"`);
+
+  // Detect and help with PowerShell @-symbol issue
+  if ((args.tags === '' || args.tags === true) && !args._[0]) {
+    const tagValue = process.argv.slice(3).find((v, i, arr) => i > 0 && arr[i-1] === '--tags' && !v.startsWith('-'));
+    if (!tagValue) {
+      console.warn(`⚠️  WARNING: --tags flag found but no value provided or lost in shell parsing.`);
+      console.warn(`    If using PowerShell with @-symbol, try quoting it: --tags '@tag_name'`);
+    }
+  }
 
   // Support --key or -k for PLAYQ_SECRET_KEY
   if (args.key) process.env.PLAYQ_SECRET_KEY = args.key;
