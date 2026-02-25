@@ -40,11 +40,6 @@ function cleanupTestResults(): void {
 // console.log('  - Env (RUNNER - cc_card_type):', process.env['cc_card_type']);
 // console.log('  - Env (RUNNER - config.testExecution.timeout):', process.env['config.testExecution.timeout'] );
 
-// Check if this is a manual rerun command
-if (process.env.PLAYQ_COMMAND === 'rerun') {
-  handleManualRerun();
-}
-
 if (process.env.PLAYQ_RUNNER && process.env.PLAYQ_RUNNER === 'cucumber') {
   // Allow vars to initialize in the cucumber child process (do NOT set PLAYQ_NO_INIT_VARS here)
   // Ensure legacy TEST_RUNNER flag used by helper code is set
@@ -172,8 +167,8 @@ if (process.env.PLAYQ_RUNNER && process.env.PLAYQ_RUNNER === 'cucumber') {
     });
 
     // Always save failed tests for potential manual rerun
-    console.log(`\n📋 Test execution completed with exit code: ${result.status || 0}`);
-    saveFailedTestsIfAny(result.status || 0);
+    console.log(`\n📋 Test execution completed with exit code: ${result.status ?? 1}`);
+    saveFailedTestsIfAny(result.status ?? 1);
   }
 
 }

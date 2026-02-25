@@ -69,7 +69,14 @@ npx playq merge-reports --runner cucumber
 ### Viewing Cucumber HTML Reports
 Cucumber reports are generated during test execution. To view them:
 ```bash
+# Windows PowerShell
 start test-results/cucumber-report.html
+
+# macOS
+open test-results/cucumber-report.html
+
+# Linux
+xdg-open test-results/cucumber-report.html
 ```
 
 ## View All Reports
@@ -79,13 +86,27 @@ start test-results/cucumber-report.html
 npx playwright show-report test-results/playwright-report
 
 # Cucumber report
+# Windows PowerShell
 start test-results/cucumber-report.html
+
+# macOS
+open test-results/cucumber-report.html
+
+# Linux
+xdg-open test-results/cucumber-report.html
 ```
 
 ## Clean Up
 
 ```bash
+# Windows PowerShell
 Remove-Item -Recurse -Force test-results -ErrorAction SilentlyContinue
+
+# macOS and Linux (Bash/Zsh)
+rm -rf test-results
+
+# Cross-platform using Node.js
+node -e "require('fs').rmSync('test-results', { recursive: true, force: true })"
 ```
 
 ## Command Options

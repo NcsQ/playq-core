@@ -97,7 +97,7 @@ if ($DryRun) {
 # Execute merge
 Write-Host "🚀 Executing merge..." -ForegroundColor Cyan
 try {
-    & npx @mergeCmd
+    & npx $mergeCmd
     $exitCode = $LASTEXITCODE
     
     if ($exitCode -eq 0) {

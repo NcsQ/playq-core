@@ -5,20 +5,27 @@ import { rmSync } from 'fs';
 export function setupEnvironment() {
   loadEnv();
 
+  // Skip cleanup if this is a rerun (rerun.ts handles selective cleanup)
+  const isRerun = process.env.PLAYQ_IS_RERUN === 'true';
+
   // If running in Cucumber mode, we need to handle pre-processing differently
   if (process.env.PLAYQ_RUNNER === 'cucumber') {
     // CUCUMBER RUNNER
-    // Remove test-results directory for cucumber runner
-    try {
-      rmSync(path.resolve(process.env['PLAYQ_PROJECT_ROOT'], 'test-results'), { recursive: true, force: true });
-    } catch (err) {
-      console.warn('Warning: Failed to remove test-results', err);
+    // Remove test-results directory for cucumber runner (unless in rerun mode)
+    if (!isRerun) {
+      try {
+        rmSync(path.resolve(process.env['PLAYQ_PROJECT_ROOT'], 'test-results'), { recursive: true, force: true });
+      } catch (err) {
+        console.warn('Warning: Failed to remove test-results', err);
+      }
+    } else {
+      console.log('ℹ️  Skipping test-results cleanup (rerun mode)');
     }
     require(path.resolve(process.env['PLAYQ_CORE_ROOT'], 'exec/preProcessEntry.ts'));
     } else {
     // PLAYWRIGHT RUNNER
     // Skip cleanup if this is a rerun (rerun.ts handles selective cleanup)
-    if (process.env.PLAYQ_IS_RERUN !== 'true') {
+    if (!isRerun) {
       // Remove test-results directory (includes allure-report and allure-results)
       try {
         rmSync(path.resolve(process.env['PLAYQ_PROJECT_ROOT'], 'test-results'), { recursive: true, force: true });

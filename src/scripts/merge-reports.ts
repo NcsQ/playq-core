@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { execSync } from 'child_process';
+import { spawnSync } from 'child_process';
 import minimist from 'minimist';
 
 /**
@@ -204,7 +204,6 @@ Examples:
           : path.join(projectRoot, args.config);
         
         const configExists = fs.existsSync(configPath);
-        const configArg = configExists ? ` -c "${args.config}"` : '';
         
         if (configExists) {
           console.log(`⚙️  Using merge config: ${args.config}`);
@@ -212,50 +211,63 @@ Examples:
           console.log('ℹ️  No merge config specified, using Playwright defaults');
         }
         
-        // Build merge command
+        // Normalize merge dir path to forward slashes for Playwright
         const relMergeDir = path.relative(projectRoot, mergeDir).replace(/\\/g, '/');
-        const mergeCmd = `npx playwright merge-reports${configArg} --reporter html "${relMergeDir}"`;
+        
+        // Build command array: npx playwright merge-reports [--config <path>] --reporter html <dir>
+        const args_array = ['playwright', 'merge-reports'];
+        if (configExists) {
+          args_array.push('--config', args.config);
+        }
+        args_array.push('--reporter', 'html', relMergeDir);
         
         console.log(`\n🔀 Merging Playwright reports into HTML...`);
-        console.log(`   Running: ${mergeCmd}`);
+        console.log(`   Running: npx ${args_array.join(' ')}`);
         
-        try {
-          execSync(mergeCmd, { 
+        const result = spawnSync('npx', args_array, { 
+          cwd: projectRoot, 
+          stdio: 'inherit',
+          env: { ...process.env }
+        });
+        
+        if (result.error) {
+          console.error('\n❌ Failed to launch merge command:', result.error.message);
+          process.exit(1);
+        }
+        
+        if (result.status !== 0) {
+          console.error('\n❌ Failed to merge Playwright reports');
+          process.exit(1);
+        }
+          
+        console.log(`\n✅ Playwright reports merged successfully!`);
+        const effectiveHtmlReportDir = configExists ? htmlReportDir : path.join(projectRoot, 'playwright-report');
+        console.log(`📊 HTML report generated at: ${path.relative(projectRoot, effectiveHtmlReportDir)}`);
+        
+        // Open report if requested
+        if (args.open) {
+          console.log(`\n🌐 Opening Playwright report in browser...`);
+          const openArgs = ['playwright', 'show-report'];
+          if (configExists) {
+            openArgs.push(path.relative(projectRoot, effectiveHtmlReportDir));
+          }
+          
+          const openResult = spawnSync('npx', openArgs, { 
             cwd: projectRoot, 
             stdio: 'inherit',
             env: { ...process.env }
           });
           
-          console.log(`\n✅ Playwright reports merged successfully!`);
-          const effectiveHtmlReportDir = args.config ? htmlReportDir : path.join(projectRoot, 'playwright-report');
-          console.log(`📊 HTML report generated at: ${path.relative(projectRoot, effectiveHtmlReportDir)}`);
-          
-          // Open report if requested
-          if (args.open) {
-            console.log(`\n🌐 Opening Playwright report in browser...`);
-            const openCmd = args.config ? 
-              `npx playwright show-report "${path.relative(projectRoot, effectiveHtmlReportDir)}"` :
-              'npx playwright show-report';
-            
-            try {
-              execSync(openCmd, { 
-                cwd: projectRoot, 
-                stdio: 'inherit',
-                env: { ...process.env }
-              });
-            } catch (err: any) {
-              // Exit code 130 is normal (user closed the viewer)
-              if (err.status !== 130) {
-                console.warn('⚠️  Could not open report viewer:', err.message);
-              }
+          // Exit code 130 is normal (user closed the viewer)
+          if (openResult.status !== 0 && openResult.status !== 130) {
+            if (openResult.error) {
+              console.warn('⚠️  Could not open report viewer:', openResult.error.message);
+            } else {
+              console.warn(`⚠️  Report viewer exited with code ${openResult.status}`);
             }
-          } else {
-            console.log(`\n💡 To view the Playwright report, run: npx playwright show-report`);
           }
-          
-        } catch (err: any) {
-          console.error('\n❌ Failed to merge Playwright reports:', err.message);
-          process.exit(1);
+        } else {
+          console.log(`\n💡 To view the Playwright report, run: npx playwright show-report`);
         }
       }
     }

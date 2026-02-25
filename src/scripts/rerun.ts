@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { spawnSync, execSync } from 'child_process';
+import { spawnSync } from 'child_process';
 import minimist from 'minimist';
 
 function readLines(filePath: string): string[] {
@@ -97,34 +97,29 @@ function runPlaywrightGrep(projectRoot: string, files: string[], env?: string, p
     removeDirSafe(path.join(projectRoot, 'test-results/playwright-report'));
     removeDirSafe(path.join(projectRoot, 'test-results/blob-report'));
     
-    // Build command: npx playwright test <relative-files> --config=<relative-config> [--project ...]
-    const filesArg = relFiles.map(f => `"${f}"`).join(' ');
+    // Build command array: npx playwright test <relative-files> --config=<relative-config> [--project ...]
+    const args = ['playwright', 'test', ...relFiles, `--config=${relConfigPath}`];
 
     // Preserve any --project option passed to this script so reruns target the same project
     const argv = minimist(process.argv.slice(2));
     const projectOption = (argv.project ?? argv.p) as string | string[] | undefined;
-    let projectArgs = '';
     if (projectOption) {
       if (Array.isArray(projectOption)) {
-        projectArgs = projectOption.map(p => ` --project="${p}"`).join('');
+        projectOption.forEach(p => args.push(`--project=${p}`));
       } else {
-        projectArgs = ` --project="${projectOption}"`;
+        args.push(`--project=${projectOption}`);
       }
     }
 
-    const cmd = `npx playwright test ${filesArg} --config="${relConfigPath}"${projectArgs}`;
-    console.log(`🎭 Running: ${cmd}`);
+    console.log(`🎭 Running: npx ${args.join(' ')}`);
     
-    try {
-      // Use execSync with shell to properly handle PATH and npx availability
-      execSync(cmd, { cwd: projectRoot, stdio: 'inherit', env: { ...process.env, PLAYQ_ENV: env || 'default', PLAYQ_IS_RERUN: 'true' } });
-      console.log(`   Exit code: 0`);
-      return 0;
-    } catch (err: any) {
-      // execSync throws on non-zero exit, but we still want to return the exit code
-      console.log(`   Exit code: ${err.status}`);
-      return err.status ?? 1;
+    const envVars: NodeJS.ProcessEnv = { ...process.env, PLAYQ_ENV: env || 'default', PLAYQ_IS_RERUN: 'true' };
+    const result = spawnSync('npx', args, { cwd: projectRoot, stdio: 'inherit', env: envVars });
+    console.log(`   Exit code: ${result.status ?? 1}`);
+    if (result.error) {
+      console.error(`   Error: ${result.error.message}`);
     }
+    return result.status ?? 1;
   } catch (err) {
     console.error(`❌ Error in runPlaywrightGrep:`, err);
     return 1;
@@ -163,7 +158,7 @@ function runCucumberRerun(projectRoot: string, rerunFile: string, env?: string):
   return result.status ?? 1;
 }
 
-async function main() {
+function main() {
   const argv = minimist(process.argv.slice(2), {
     string: ['runner', 'env', 'file', 'project', 'folder'],
     alias: { r: 'runner', e: 'env', f: 'file', a: 'attempts', p: 'project' },
@@ -230,7 +225,4 @@ async function main() {
   }
 }
 
-main().catch(err => {
-  console.error(err);
-  process.exit(1);
-});
+main();

@@ -147,7 +147,17 @@ function executeCucumberRerun(): boolean {
       shell: true
     });
 
-    return result.status === 0;
+    if (result.error) {
+      console.error('❌ Failed to spawn Cucumber process:', result.error.message);
+      return false;
+    }
+
+    if (result.signal) {
+      console.error(`❌ Cucumber process terminated by signal: ${result.signal}`);
+      return false;
+    }
+
+    return (result.status ?? 1) === 0;
   } catch (err) {
     console.error('❌ Cucumber rerun failed:', err);
     return false;
@@ -201,12 +211,22 @@ function executePlaywrightRerun(): boolean {
       shell: true
     });
 
-    return result.status === 0;
+    if (result.error) {
+      console.error('❌ Failed to spawn Playwright process:', result.error.message);
+      return false;
+    }
+
+    if (result.signal) {
+      console.error(`❌ Playwright process terminated by signal: ${result.signal}`);
+      return false;
+    }
+
+    return (result.status ?? 1) === 0;
   } catch (err) {
     console.error('❌ Error executing Playwright rerun:', err);
     return false;
   }
-  }
+}
 
 /**
  * Generate a summary report of the rerun
