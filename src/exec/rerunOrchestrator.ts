@@ -58,6 +58,26 @@ export function executeRerunWorkflow(config: RerunConfig): boolean {
     console.log(`\n🚀 Step 3: Executing rerun...`);
     const rerunSuccess = executeRerun(config);
 
+    // Step 3.5: Preserve rerun artifacts
+    // Rerun execution writes to test-results/; copy those to rerunReportDir for merging
+    if (fs.existsSync(path.join(projectRoot, 'test-results'))) {
+      console.log(`\n📦 Preserving rerun artifacts...`);
+      fs.mkdirSync(config.rerunReportDir, { recursive: true });
+      const srcDir = path.join(projectRoot, 'test-results');
+      const srcBlob = path.join(srcDir, 'blob-report');
+      if (fs.existsSync(srcBlob)) {
+        const destBlob = path.join(config.rerunReportDir, 'blob-report');
+        if (fs.existsSync(destBlob)) fs.rmSync(destBlob, { recursive: true, force: true });
+        fs.renameSync(srcBlob, destBlob);
+      }
+      const srcAllure = path.join(srcDir, 'allure-results');
+      if (fs.existsSync(srcAllure)) {
+        const destAllure = path.join(config.rerunReportDir, 'allure-results');
+        if (fs.existsSync(destAllure)) fs.rmSync(destAllure, { recursive: true, force: true });
+        fs.renameSync(srcAllure, destAllure);
+      }
+    }
+
     // Step 4: Merge reports
     console.log(`\n📦 Step 4: Merging reports...`);
     const outputDir = path.join(config.mergedReportDir);

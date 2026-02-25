@@ -11,11 +11,24 @@ import path from 'path';
  */
 export function mergeBlobReports(initialDir: string, rerunDir: string, outputDir: string): void {
   try {
-    const initialReport = path.join(initialDir, 'report.jsonl');
-    const rerunReport = path.join(rerunDir, 'report.jsonl');
-    const mergedReport = path.join(outputDir, 'report-merged.jsonl');
+    // Look for blob report files with pattern matching (report.jsonl, report-1.jsonl, report-2.jsonl, etc.)
+    const collectedFiles: string[] = [];
+    
+    // Collect from initial dir
+    if (fs.existsSync(initialDir)) {
+      const entries = fs.readdirSync(initialDir);
+      const blobFiles = entries.filter(name => /^report.*\.jsonl$/i.test(name));
+      blobFiles.forEach(file => collectedFiles.push(path.join(initialDir, file)));
+    }
+    
+    // Collect from rerun dir if different
+    if (rerunDir !== initialDir && fs.existsSync(rerunDir)) {
+      const entries = fs.readdirSync(rerunDir);
+      const blobFiles = entries.filter(name => /^report.*\.jsonl$/i.test(name));
+      blobFiles.forEach(file => collectedFiles.push(path.join(rerunDir, file)));
+    }
 
-    if (!fs.existsSync(initialReport) && !fs.existsSync(rerunReport)) {
+    if (collectedFiles.length === 0) {
       console.log('⚠️ No blob reports found to merge');
       return;
     }
@@ -23,49 +36,32 @@ export function mergeBlobReports(initialDir: string, rerunDir: string, outputDir
     let mergedLines: any[] = [];
     const testTitleMap: Map<string, any> = new Map();
 
-    // Read initial report
-    if (fs.existsSync(initialReport)) {
-      const content = fs.readFileSync(initialReport, 'utf-8');
-      const lines = content.split('\n').filter(line => line.trim());
-      lines.forEach(line => {
-        try {
-          const json = JSON.parse(line);
-          // Use test title as unique key
-          if (json.title) {
-            testTitleMap.set(json.title, { ...json, source: 'initial' });
-          } else {
-            mergedLines.push(json);
+    // Read all collected blob files
+    collectedFiles.forEach(reportFile => {
+      try {
+        const content = fs.readFileSync(reportFile, 'utf-8');
+        const lines = content.split('\n').filter(line => line.trim());
+        lines.forEach(line => {
+          try {
+            const json = JSON.parse(line);
+            // Use test title as unique key
+            if (json.title) {
+              testTitleMap.set(json.title, { 
+                ...json, 
+                source: reportFile.includes(rerunDir) ? 'rerun' : 'initial',
+                ok: json.ok || testTitleMap.get(json.title)?.ok 
+              });
+            } else {
+              mergedLines.push(json);
+            }
+          } catch (e) {
+            console.warn('⚠️ Skipping invalid JSON line in blob report');
           }
-        } catch (e) {
-          console.warn('⚠️ Skipping invalid JSON line in initial report');
-        }
-      });
-    }
-
-    // Read rerun report and override failures
-    if (fs.existsSync(rerunReport)) {
-      const content = fs.readFileSync(rerunReport, 'utf-8');
-      const lines = content.split('\n').filter(line => line.trim());
-      lines.forEach(line => {
-        try {
-          const json = JSON.parse(line);
-          if (json.title) {
-            const existing = testTitleMap.get(json.title);
-            // If test passed in rerun, use rerun result; otherwise keep track that it failed again
-            testTitleMap.set(json.title, { 
-              ...json, 
-              source: 'rerun',
-              previousFailed: existing?.status === 'failed',
-              ok: json.ok || existing?.ok 
-            });
-          } else {
-            mergedLines.push(json);
-          }
-        } catch (e) {
-          console.warn('⚠️ Skipping invalid JSON line in rerun report');
-        }
-      });
-    }
+        });
+      } catch (e) {
+        console.warn(`⚠️ Could not read blob report ${reportFile}:`, e);
+      }
+    });
 
     // Convert map back to array
     mergedLines = Array.from(testTitleMap.values()).concat(mergedLines);
@@ -73,9 +69,10 @@ export function mergeBlobReports(initialDir: string, rerunDir: string, outputDir
     // Write merged report
     fs.mkdirSync(outputDir, { recursive: true });
     const mergedContent = mergedLines.map(json => JSON.stringify(json)).join('\n');
-    fs.writeFileSync(mergedReport, mergedContent, 'utf-8');
+    const mergedReportPath = path.join(outputDir, 'report-merged.jsonl');
+    fs.writeFileSync(mergedReportPath, mergedContent, 'utf-8');
 
-    console.log(`✅ Blob reports merged: ${mergedReport}`);
+    console.log(`✅ Blob reports merged: ${mergedReportPath}`);
   } catch (err) {
     console.error('❌ Error merging blob reports:', err);
   }

@@ -90,6 +90,9 @@ if (process.env.PLAYQ_RUNNER && process.env.PLAYQ_RUNNER === 'cucumber') {
     const runConfigPath = path.resolve(process.cwd(), `resources/run-configs/${process.env.PLAYQ_RUN_CONFIG}.run`);
     const runConfig = require(runConfigPath).default;
     console.log('🌐 Running with runConfig:', JSON.stringify(runConfig));
+    
+    let overallExitCode = 0;
+    
     for (const cfg of runConfig.runs) {
 
       console.log(`    - Running test with grep: ${cfg.PLAYQ_GREP}, env: ${cfg.PLAYQ_ENV}`);
@@ -122,11 +125,16 @@ if (process.env.PLAYQ_RUNNER && process.env.PLAYQ_RUNNER === 'cucumber') {
         shell: true,
         env: childEnv,
       });
+      
+      // Capture exit code from this run
+      if (result.status && result.status !== 0) {
+        overallExitCode = result.status;
+      }
 
     }
 
     // Always save failed tests for potential manual rerun
-    saveFailedTestsIfAny(0);
+    saveFailedTestsIfAny(overallExitCode);
   } else {
   process.env.PLAYQ_NO_INIT_VARS = '1';
   loadEnv();
@@ -169,7 +177,8 @@ if (process.env.PLAYQ_RUNNER && process.env.PLAYQ_RUNNER === 'cucumber') {
  * Always saves failures (if any) to `.playq-failed-tests.json`
  */
 function saveFailedTestsIfAny(exitCode: number): void {
-  console.log(`🔍 [DEBUG] saveFailedTestsIfAny called with exit code: ${exitCode}`);
+  const debug = process.env.PLAYQ_DEBUG === 'true';
+  if (debug) console.log(`🔍 [DEBUG] saveFailedTestsIfAny called with exit code: ${exitCode}`);
   const projectRoot = process.cwd();
   const runner = (process.env.PLAYQ_RUNNER || 'playwright') as 'playwright' | 'cucumber';
   const reportDir = path.join(projectRoot, 'test-results');
@@ -177,9 +186,9 @@ function saveFailedTestsIfAny(exitCode: number): void {
 
   try {
     // Extract failed tests from reports
-    console.log(`🔍 [DEBUG] Extracting failed tests from: ${reportDir}`);
+    if (debug) console.log(`🔍 [DEBUG] Extracting failed tests from: ${reportDir}`);
     const failedTests = extractFailedTests(reportDir, runner);
-    console.log(`🔍 [DEBUG] Found ${failedTests.length} failed tests`);
+    if (debug) console.log(`🔍 [DEBUG] Found ${failedTests.length} failed tests`);
 
     if (failedTests.length > 0) {
       // Save failed tests to file

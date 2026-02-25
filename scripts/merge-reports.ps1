@@ -4,9 +4,9 @@
 # Usage: .\merge-reports.ps1 -OutputFolder "blob-report_merge" -Open
 
 param(
-    [string]$SourceFolder1 = "blob-report",
-    [string]$SourceFolder2 = "blob-report_full",
-    [string]$OutputFolder = "blob-report_merge",
+    [string]$SourceFolder1 = "test-results/blob-report",
+    [string]$SourceFolder2 = "test-results/blob-report_full",
+    [string]$OutputFolder = "test-results/blob-report_merge",
     [string]$ConfigPath = "playq/config/playwright/merge.config.js",
     [switch]$Open = $false,
     [switch]$DryRun = $false

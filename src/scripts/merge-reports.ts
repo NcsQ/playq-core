@@ -141,6 +141,14 @@ Examples:
     process.exit(0);
   }
   
+  // Validate runner argument
+  const validRunners = ['cucumber', 'playwright', 'all'];
+  if (!validRunners.includes(args.runner)) {
+    console.error(`❌ Invalid --runner value: "${args.runner}"`);
+    console.error(`   Valid options: ${validRunners.join(', ')}`);
+    process.exit(1);
+  }
+  
   const projectRoot = process.cwd();
   const mergeDir = path.join(projectRoot, 'test-results/blob-report_merge');
   const htmlReportDir = path.join(projectRoot, 'test-results/playwright-report');
@@ -219,12 +227,15 @@ Examples:
           });
           
           console.log(`\n✅ Playwright reports merged successfully!`);
-          console.log(`📊 HTML report generated at: ${path.relative(projectRoot, htmlReportDir)}`);
+          const effectiveHtmlReportDir = args.config ? htmlReportDir : path.join(projectRoot, 'playwright-report');
+          console.log(`📊 HTML report generated at: ${path.relative(projectRoot, effectiveHtmlReportDir)}`);
           
           // Open report if requested
           if (args.open) {
             console.log(`\n🌐 Opening Playwright report in browser...`);
-            const openCmd = 'npx playwright show-report';
+            const openCmd = args.config ? 
+              `npx playwright show-report "${path.relative(projectRoot, effectiveHtmlReportDir)}"` :
+              'npx playwright show-report';
             
             try {
               execSync(openCmd, { 

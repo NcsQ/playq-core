@@ -3,11 +3,6 @@ import path from 'path';
 import { spawnSync, execSync } from 'child_process';
 import minimist from 'minimist';
 
-// Simple utility to escape grep patterns for Playwright
-function escapeRegex(str: string): string {
-  return str.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&');
-}
-
 function readLines(filePath: string): string[] {
   try {
     const raw = fs.readFileSync(filePath, 'utf-8');
@@ -102,9 +97,22 @@ function runPlaywrightGrep(projectRoot: string, files: string[], env?: string, p
     removeDirSafe(path.join(projectRoot, 'test-results/playwright-report'));
     removeDirSafe(path.join(projectRoot, 'test-results/blob-report'));
     
-    // Build command: npx playwright test <relative-files> --config=<relative-config>
+    // Build command: npx playwright test <relative-files> --config=<relative-config> [--project ...]
     const filesArg = relFiles.map(f => `"${f}"`).join(' ');
-    const cmd = `npx playwright test ${filesArg} --config="${relConfigPath}"`;
+
+    // Preserve any --project option passed to this script so reruns target the same project
+    const argv = minimist(process.argv.slice(2));
+    const projectOption = (argv.project ?? argv.p) as string | string[] | undefined;
+    let projectArgs = '';
+    if (projectOption) {
+      if (Array.isArray(projectOption)) {
+        projectArgs = projectOption.map(p => ` --project="${p}"`).join('');
+      } else {
+        projectArgs = ` --project="${projectOption}"`;
+      }
+    }
+
+    const cmd = `npx playwright test ${filesArg} --config="${relConfigPath}"${projectArgs}`;
     console.log(`🎭 Running: ${cmd}`);
     
     try {
@@ -125,7 +133,12 @@ function runPlaywrightGrep(projectRoot: string, files: string[], env?: string, p
 
 function runCucumberRerun(projectRoot: string, rerunFile: string, env?: string): number {
   const cucumberJs = 'cucumber-js';
-  const configPath = path.join(projectRoot, 'playq', 'config', 'cucumber', 'cucumber.js');
+  const nestedConfigPath = path.join(projectRoot, 'playq', 'config', 'cucumber', 'cucumber.js');
+  const rootConfigPath = path.join(projectRoot, 'cucumber.js');
+  const configPath =
+    fs.existsSync(nestedConfigPath) ? nestedConfigPath :
+    fs.existsSync(rootConfigPath) ? rootConfigPath :
+    nestedConfigPath;
   const args = [cucumberJs, '--config', configPath, rerunFile];
   const envVars: NodeJS.ProcessEnv = { ...process.env };
   if (env) envVars.PLAYQ_ENV = env;

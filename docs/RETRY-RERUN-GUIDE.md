@@ -34,7 +34,13 @@ npx playwright show-report test-results/playwright-report
 
 ### Cucumber
 ```bash
+# Cucumber merge-reports prints a JSON summary to console (not HTML)
 npx playq merge-reports --runner cucumber
+```
+
+### Viewing Cucumber HTML Reports
+Cucumber reports are generated during test execution. To view them:
+```bash
 start test-results/cucumber-report.html
 ```
 

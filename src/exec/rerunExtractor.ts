@@ -18,35 +18,47 @@ export function extractFailedPlaywrightTests(blobReportDir: string): FailedTest[
   const failed: FailedTest[] = [];
 
   try {
-    const reportFile = path.join(blobReportDir, 'report.jsonl');
-    if (!fs.existsSync(reportFile)) {
+    // Ensure the directory exists before attempting to read reports
+    if (!fs.existsSync(blobReportDir) || !fs.statSync(blobReportDir).isDirectory()) {
       return failed;
     }
 
-    const content = fs.readFileSync(reportFile, 'utf-8');
-    const lines = content.split('\n').filter(line => line.trim());
+    // Look for all JSONL report shards, e.g. report.jsonl, report-1.jsonl, report-2.jsonl, etc.
+    const entries = fs.readdirSync(blobReportDir);
+    const reportFiles = entries.filter(name => /^report.*\.jsonl$/i.test(name));
 
-    lines.forEach(line => {
-      try {
-        const json = JSON.parse(line);
-        // Check for failed tests
-        if (json.status === 'failed' || !json.ok) {
-          failed.push({
-            name: json.title || 'Unknown',
-            type: 'playwright',
-            identifier: json.title || json.name || ''
-          });
-        }
-      } catch (e) {
-        // Skip invalid JSON
+    if (reportFiles.length === 0) {
+      return failed;
+    }
+
+    reportFiles.forEach(reportFileName => {
+      const reportFilePath = path.join(blobReportDir, reportFileName);
+      if (!fs.existsSync(reportFilePath)) {
+        return;
       }
+
+      const content = fs.readFileSync(reportFilePath, 'utf-8');
+      const lines = content.split('\n').filter(line => line.trim());
+
+      lines.forEach(line => {
+        try {
+          const json = JSON.parse(line);
+          // Check for failed tests
+          if (json && (json.status === 'failed' || json.ok === false)) {
+            failed.push({
+              name: json.title || json.name || 'Unknown',
+              type: 'playwright',
+              identifier: json.title || json.name || ''
+            });
+          }
+        } catch (e) {
+          // Skip invalid JSON
+        }
+      });
     });
 
     if (failed.length > 0) {
-      console.log(`🔍 Found ${failed.length} failed Playwright test(s):`);
-      failed.forEach((t, i) => {
-        console.log(`   ${i + 1}. ${t.name}`);
-      });
+      console.log(`✅ Found ${failed.length} failed Playwright test(s) to rerun`);
     }
   } catch (err) {
     console.warn('⚠️ Error extracting failed Playwright tests:', err);
@@ -64,26 +76,17 @@ export function extractFailedTestsFromJunit(junitFile: string): FailedTest[] {
   try {
     const content = fs.readFileSync(junitFile, 'utf-8');
     
-    console.log(`  📄 Reading junit file: ${junitFile}`);
-    console.log(`  📊 File size: ${content.length} bytes`);
-    
     // Parse failure elements: <failure message="fill.spec.ts:15:13 Fill alias: fill" type="FAILURE">
     const failureMatch = content.match(/<failure\s+message="([^"]+)"/g);
     
-    console.log(`  🔎 Regex match result: ${failureMatch ? failureMatch.length + ' matches' : 'no matches'}`);
-    
     if (failureMatch && failureMatch.length > 0) {
-      console.log(`  ✅ Found ${failureMatch.length} failure element(s)`);
-      failureMatch.forEach((match, idx) => {
-        console.log(`     [${idx + 1}] Raw match: "${match}"`);
+      failureMatch.forEach((match) => {
         // Extract message like "fill.spec.ts:15:13 Fill alias: fill"
         const messageMatch = match.match(/message="([^"]+)"/);
         if (messageMatch) {
           const fullMessage = messageMatch[1];
-          console.log(`     [${idx + 1}] Message: "${fullMessage}"`);
           // Extract test name from message (part after the last space)
           const parts = fullMessage.split(/\s+/);
-          console.log(`     [${idx + 1}] Parts: ${JSON.stringify(parts)}`);
           if (parts.length > 1) {
             const testName = parts.slice(1).join(' ');
             console.log(`     [${idx + 1}] Test name: "${testName}"`);
@@ -95,14 +98,11 @@ export function extractFailedTestsFromJunit(junitFile: string): FailedTest[] {
           }
         }
       });
-    } else {
-      console.log(`  ❌ No <failure> elements found in junit`);
     }
   } catch (err) {
     console.warn('⚠️ Error extracting failed tests from junit:', err);
   }
 
-  console.log(`  📋 Junit extraction result: ${failed.length} failed test(s)`);
   return failed;
 }
 

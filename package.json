@@ -1,6 +1,6 @@
 {
   "name": "@playq/core",
-  "version": "0.2.84",
+  "version": "0.2.83",
   "description": "PlayQ Core (Phase 1) - raw TypeScript sources only.",
   "files": [
     "bin",
