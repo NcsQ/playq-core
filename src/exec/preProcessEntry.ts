@@ -36,8 +36,11 @@ if (isRerun) {
     // Extract unique feature file paths from scenario paths (e.g., "_Temp/execution/forms.feature:8" -> "test/features/forms.feature")
     const uniqueFeatures = new Set<string>();
     scenarioPaths.forEach(scenarioPath => {
-      // Remove line number: "_Temp/execution/forms.feature:8" -> "_Temp/execution/forms.feature"
-      const featurePath = scenarioPath.split(':')[0];
+      // Normalize slashes (handle Windows backslashes) and remove line number
+      const normalized = scenarioPath.replace(/\\/g, '/');
+      // Split on last ':' to preserve path colons and extract only trailing line number
+      const lastColonIndex = normalized.lastIndexOf(':');
+      const featurePath = lastColonIndex > -1 ? normalized.substring(0, lastColonIndex) : normalized;
       // Convert from _Temp/execution back to test/features
       const originalPath = featurePath.replace('_Temp/execution/', 'test/features/');
       uniqueFeatures.add(originalPath);

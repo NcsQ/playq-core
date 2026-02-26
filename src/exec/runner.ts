@@ -17,7 +17,7 @@ function cleanupTestResults(): void {
     return;
   }
 
-  const projectRoot = process.cwd();
+  const projectRoot = process.env.PLAYQ_PROJECT_ROOT || process.cwd();
   const testResultsDir = path.join(projectRoot, 'test-results');
   
   if (fs.existsSync(testResultsDir)) {

@@ -109,7 +109,21 @@ export function setupEnvironment() {
 
   // If running in Cucumber mode, handle pre-processing
   if (process.env.PLAYQ_RUNNER === 'cucumber') {
-    require(path.resolve(process.env['PLAYQ_CORE_ROOT'], 'exec/preProcessEntry.js'));
+    // Prefer compiled JS entry under dist/, fall back to TS entry under src/
+    const jsEntry = path.resolve(projectRoot, 'dist', 'exec', 'preProcessEntry.js');
+    const tsEntry = path.resolve(projectRoot, 'src', 'exec', 'preProcessEntry.ts');
+
+    if (existsSync(jsEntry)) {
+      require(jsEntry);
+    } else if (existsSync(tsEntry)) {
+      require(tsEntry);
+    } else {
+      throw new Error(
+        `Unable to locate Cucumber pre-process entry. Tried:\n` +
+        `  - ${jsEntry}\n` +
+        `  - ${tsEntry}`
+      );
+    }
   }
   
   // General directory cleanup for temporary folders
