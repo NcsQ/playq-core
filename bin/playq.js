@@ -116,6 +116,12 @@ if (process.argv[2] === 'test') {
     }
   }
 
+  // Validate conflicting flags
+  if (args.grep && args.tags) {
+    console.warn(`⚠️  WARNING: Both --grep and --tags specified. Using --tags (Cucumber).`);
+    console.warn(`   If you intended Playwright mode, use --grep without --tags.`);
+  }
+
   // Support --key or -k for PLAYQ_SECRET_KEY
   if (args.key) process.env.PLAYQ_SECRET_KEY = args.key;
 

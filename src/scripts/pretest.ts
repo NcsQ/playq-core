@@ -7,7 +7,7 @@ export function setupEnvironment() {
 
   // Skip cleanup if this is a rerun (rerun.ts handles selective cleanup)
   const isRerun = process.env.PLAYQ_IS_RERUN === 'true';
-  const projectRoot = process.env['PLAYQ_PROJECT_ROOT'];
+  const projectRoot = process.env['PLAYQ_PROJECT_ROOT'] || process.cwd();
 
   // If running a FRESH test (not a rerun), clear old rerun metadata files AND test-results
   // This ensures rerun only contains the latest failed tests, not accumulated ones
@@ -62,14 +62,14 @@ export function setupEnvironment() {
     console.log('ℹ️  RERUN MODE: Cleaning test results for fresh rerun...');
     
     try {
-      // Remove allure-results so merged report only shows rerun tests
-      const allureResultsPath = path.resolve(projectRoot, 'allure-results');
+      // Remove Allure results under test-results so merged report only shows rerun tests
+      const allureResultsPath = path.resolve(projectRoot, 'test-results', 'allure-results');
       if (existsSync(allureResultsPath)) {
         rmSync(allureResultsPath, { recursive: true, force: true });
-        console.log('  ✓ Removed: allure-results/');
+        console.log('  ✓ Removed: test-results/allure-results/');
       }
     } catch (err) {
-      console.warn('  ⚠️  Could not clean allure-results:', err);
+      console.warn('  ⚠️  Could not clean test-results/allure-results:', err);
     }
     
     try {
@@ -79,7 +79,7 @@ export function setupEnvironment() {
         // These are safe to remove - they're reports/artifacts
         const safeToRemove = ['artifacts', 'cucumber-report.html', 'cucumber-report.json', 
                               'playwright-report', 'screenshots', 'traces', 'videos', 'scenarios',
-                              'e2e-junit-results.xml'];
+                              'e2e-junit-results.xml', 'logs'];
         safeToRemove.forEach(sub => {
           const subPath = path.resolve(testResultsPath, sub);
           if (existsSync(subPath)) {
@@ -109,7 +109,7 @@ export function setupEnvironment() {
 
   // If running in Cucumber mode, handle pre-processing
   if (process.env.PLAYQ_RUNNER === 'cucumber') {
-    require(path.resolve(process.env['PLAYQ_CORE_ROOT'], 'exec/preProcessEntry.ts'));
+    require(path.resolve(process.env['PLAYQ_CORE_ROOT'], 'exec/preProcessEntry.js'));
   }
   
   // General directory cleanup for temporary folders

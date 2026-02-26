@@ -6,7 +6,7 @@ import minimist from 'minimist';
 /**
  * Merge test reports (Playwright blob reports + Cucumber JSON reports) into unified reports.
  * - Playwright: Merges blob reports into HTML report
- * - Cucumber: Merges JSON reports into single aggregated report
+ * - Cucumber: Displays aggregated JSON report summary
  * Cross-platform implementation for Mac, Windows, and Linux.
  * 
  * Usage:

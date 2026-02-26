@@ -44,12 +44,8 @@ if (process.env.PLAYQ_RUNNER && process.env.PLAYQ_RUNNER === 'cucumber') {
   // Ensure legacy TEST_RUNNER flag used by helper code is set
   process.env.TEST_RUNNER = 'cucumber';
   
-  // LOG FOR DEBUGGING TAG FILTERING
-  console.log(`🔍 Cucumber block: PLAYQ_TAGS = "${process.env.PLAYQ_TAGS}", PLAYQ_RUNNER = "${process.env.PLAYQ_RUNNER}"`);
-  
   // PRESERVE CLI-SET ENVIRONMENT VARIABLES BEFORE loadEnv() potentially overwrites them
   const cliTags = process.env.PLAYQ_TAGS;
-  console.log(`💾 Saved cliTags = "${cliTags}"`);
   const cliGrep = process.env.PLAYQ_GREP;
   const cliEnv = process.env.PLAYQ_ENV;
   const cliProject = process.env.PLAYQ_PROJECT;
@@ -81,9 +77,11 @@ if (process.env.PLAYQ_RUNNER && process.env.PLAYQ_RUNNER === 'cucumber') {
   const tagsToUse = process.env.PLAYQ_TAGS || cliTags;
   if (tagsToUse) {
     cucumberArgs.push('--tags', tagsToUse);
-    console.log(`📝 Using tags: ${tagsToUse}`);
-  } else {
-    console.log(`📝 No tags specified - running all scenarios`);
+    if (process.env.PLAYQ_DEBUG === 'true') {
+      console.log(`🔍 [DEBUG] Using tags: ${tagsToUse}`);
+    }
+  } else if (process.env.PLAYQ_DEBUG === 'true') {
+    console.log(`🔍 [DEBUG] No tags specified - running all scenarios`);
   }
 
   console.log(`🎭 Running Cucumber: npx ${cucumberArgs.join(' ')}`);
@@ -122,8 +120,10 @@ if (process.env.PLAYQ_RUNNER && process.env.PLAYQ_RUNNER === 'cucumber') {
     
     let overallExitCode = 0;
     
+    // Clean test-results ONCE before all iterations (allow results to accumulate across runs)
+    cleanupTestResults();
+    
     for (const cfg of runConfig.runs) {
-
       console.log(`    - Running test with grep: ${cfg.PLAYQ_GREP}, env: ${cfg.PLAYQ_ENV}`);
       Object.keys(cfg).forEach(key => {
         if (key.trim() == 'PLAYQ_RUNNER') throw new Error('PLAYQ_RUNNER is not allowed in run configs');
@@ -155,8 +155,14 @@ if (process.env.PLAYQ_RUNNER && process.env.PLAYQ_RUNNER === 'cucumber') {
         env: childEnv,
       });
       
-      // Capture exit code from this run (handle signal terminations)
-      const exitCode = result.status ?? (result.signal ? 1 : 0);
+      // Capture exit code from this run (handle signal terminations and spawn errors)
+      let exitCode: number;
+      if (result.error) {
+        console.error(`❌ Spawn error in iteration: ${result.error.message}`);
+        exitCode = 1;
+      } else {
+        exitCode = result.status ?? (result.signal ? 1 : 0);
+      }
       if (exitCode !== 0) {
         overallExitCode = exitCode;
       }
@@ -204,7 +210,7 @@ if (process.env.PLAYQ_RUNNER && process.env.PLAYQ_RUNNER === 'cucumber') {
 
 /**
  * Save failed tests from the current test run for potential manual rerun
- * Creates both .playq-failed-tests.json (for npx playq rerun) and @rerun.txt/@rerun.pw (for direct cucumber-js/playwright-cli)
+ * Creates both .playq-failed-tests.json (for npx playq rerun) and @rerun.txt/.playwright-rerun (for direct cucumber-js/playwright-cli)
  */
 function saveFailedTestsIfAny(exitCode: number): void {
   const debug = process.env.PLAYQ_DEBUG === 'true';

@@ -84,10 +84,12 @@ export function extractFailedTestsFromJunit(junitFile: string): FailedTest[] {
     const fileAgeMs = Date.now() - stats.mtimeMs;
     const fileAgeMinutes = Math.round(fileAgeMs / 60000);
     
-    // Only use junit file if it was modified within the last 5 minutes
+    // Only use junit file if it was modified within the last 30 minutes
     // This ensures we're reading results from the current test run, not old ones
-    if (fileAgeMs > 5 * 60 * 1000) {
-      console.warn(`⚠️  Skipping OLD junit file (modified ${fileAgeMinutes} minutes ago) - run fresh tests first`);
+    // (Allows for long-running test suites)
+    if (fileAgeMs > 30 * 60 * 1000) {
+      console.warn(`⚠️  Skipping stale junit file (modified ${fileAgeMinutes} minutes ago, >30min threshold)`);
+      console.warn(`   Run fresh tests first to generate current failure reports.`);
       return failed;
     }
     
@@ -140,10 +142,12 @@ export function extractFailedCucumberTests(cucumberReportFile: string): FailedTe
     const fileAgeMs = Date.now() - stats.mtimeMs;
     const fileAgeMinutes = Math.round(fileAgeMs / 60000);
     
-    // Only use report if it was modified within the last 5 minutes
+    // Only use report if it was modified within the last 30 minutes
     // This ensures we're reading results from the current test run, not old ones
-    if (fileAgeMs > 5 * 60 * 1000) {
-      console.warn(`⚠️  Skipping OLD Cucumber report (modified ${fileAgeMinutes} minutes ago) - run fresh tests first`);
+    // (Allows for long-running test suites)
+    if (fileAgeMs > 30 * 60 * 1000) {
+      console.warn(`⚠️  Skipping stale Cucumber report (modified ${fileAgeMinutes} minutes ago, >30min threshold)`);
+      console.warn(`   Run fresh tests first to generate current failure reports.`);
       return failed;
     }
 
@@ -219,6 +223,7 @@ export function extractFailedAllureTests(allureResultsDir: string): FailedTest[]
 
 /**
  * Extract all failed tests from report directory
+ * When runner='both', only extracts from actual most recent runners (prevents stale data)
  */
 export function extractFailedTests(reportDir: string, runner: 'playwright' | 'cucumber' | 'both' = 'both'): FailedTest[] {
   const allFailed: FailedTest[] = [];
@@ -226,8 +231,21 @@ export function extractFailedTests(reportDir: string, runner: 'playwright' | 'cu
 
   console.log(`🔍 Extracting failed tests from ${reportDir}...`);
 
+  // Determine which runners actually produced recent reports (to avoid stale data with 'both')
+  const getModTime = (filePath: string): number => {
+    try {
+      return fs.statSync(filePath).mtimeMs;
+    } catch {
+      return 0;
+    }
+  };
+  
+  const playwrightJunitTime = getModTime(path.join(reportDir, 'e2e-junit-results.xml'));
+  const cucumberReportTime = getModTime(path.join(reportDir, 'cucumber-report.json'));
+  const bothRunners = runner === 'both';
+
   // **PRIMARY SOURCE**: Extract from junit results (most reliable, shows actual failures)
-  if (runner === 'playwright' || runner === 'both') {
+  if (runner === 'playwright' || (bothRunners && playwrightJunitTime > 0)) {
     const junitFile = path.join(reportDir, 'e2e-junit-results.xml');
     if (fs.existsSync(junitFile)) {
       console.log('  Extracting from junit results...');
@@ -239,7 +257,7 @@ export function extractFailedTests(reportDir: string, runner: 'playwright' | 'cu
   }
 
   // SECONDARY: Extract from Playwright blob reports (fallback when junit not found)
-  if (runner === 'playwright' || runner === 'both') {
+  if (runner === 'playwright' || (bothRunners && playwrightJunitTime > 0)) {
     const blobDir = path.join(reportDir, 'blob-report');
     if (fs.existsSync(blobDir)) {
       console.log('  Extracting from blob reports...');
@@ -256,8 +274,8 @@ export function extractFailedTests(reportDir: string, runner: 'playwright' | 'cu
   // Note: Skip Allure extraction because it marks retried tests as 'passed' even if they failed initially
   // Junit is more reliable for detecting actual failures with retries
 
-  // Extract from Cucumber reports
-  if (runner === 'cucumber' || runner === 'both') {
+  // Extract from Cucumber reports (only if Cucumber was the actual runner)
+  if (runner === 'cucumber' || (bothRunners && cucumberReportTime > 0)) {
     const cucumberFile = path.join(reportDir, 'cucumber-report.json');
     if (fs.existsSync(cucumberFile)) {
       const failed = extractFailedCucumberTests(cucumberFile);

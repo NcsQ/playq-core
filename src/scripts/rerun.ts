@@ -43,8 +43,8 @@ function getPlaywrightFailedFiles(projectRoot: string, folder?: string): string[
                 r.status === 'failed' || r.status === 'interrupted' || r.status === 'timedOut'
               );
               if (anyFail) {
-                // Add full test file path
-                const filePath = path.join(projectRoot, 'tests', 'playwright', suite.file);
+                // Add full test file path - use reported file path from report (not hardcoded 'tests/playwright')
+                const filePath = path.join(projectRoot, suite.file);
                 if (!files.includes(filePath)) {
                   files.push(filePath);
                 }
@@ -100,14 +100,12 @@ function runPlaywrightGrep(projectRoot: string, files: string[], env?: string, p
     // Build command array: npx playwright test <relative-files> --config=<relative-config> [--project ...]
     const args = ['playwright', 'test', ...relFiles, `--config=${relConfigPath}`];
 
-    // Preserve any --project option passed to this script so reruns target the same project
-    const argv = minimist(process.argv.slice(2));
-    const projectOption = (argv.project ?? argv.p) as string | string[] | undefined;
-    if (projectOption) {
-      if (Array.isArray(projectOption)) {
-        projectOption.forEach(p => args.push(`--project=${p}`));
+    // Add --project option if provided (prefer function parameter over parsing argv)
+    if (project) {
+      if (Array.isArray(project)) {
+        project.forEach(p => args.push(`--project=${p}`));
       } else {
-        args.push(`--project=${projectOption}`);
+        args.push(`--project=${project}`);
       }
     }
 
@@ -130,10 +128,19 @@ function runCucumberRerun(projectRoot: string, rerunFile: string, env?: string):
   const cucumberJs = 'cucumber-js';
   const nestedConfigPath = path.join(projectRoot, 'playq', 'config', 'cucumber', 'cucumber.js');
   const rootConfigPath = path.join(projectRoot, 'cucumber.js');
-  const configPath =
-    fs.existsSync(nestedConfigPath) ? nestedConfigPath :
-    fs.existsSync(rootConfigPath) ? rootConfigPath :
-    nestedConfigPath;
+  
+  let configPath: string;
+  if (fs.existsSync(nestedConfigPath)) {
+    configPath = nestedConfigPath;
+  } else if (fs.existsSync(rootConfigPath)) {
+    configPath = rootConfigPath;
+  } else {
+    console.error(`❌ ERROR: Cucumber config not found!`);
+    console.error(`   Checked: ${nestedConfigPath}`);
+    console.error(`   Checked: ${rootConfigPath}`);
+    console.error(`   Please ensure cucumber.js exists in project root or playq/config/cucumber/`);
+    process.exit(1);
+  }
   
   // Convert absolute paths to relative for cucumber-js (it runs from projectRoot cwd)
   // Normalize to forward slashes for cucumber-js cross-platform compatibility
@@ -177,6 +184,9 @@ function runCucumberRerun(projectRoot: string, rerunFile: string, env?: string):
   removeDirSafe(path.join(projectRoot, 'test-results/cucumber-report.json'));
   
   const result = spawnSync('npx', args, { cwd: projectRoot, stdio: 'inherit', env: envVars, shell: true });
+  if (result.error) {
+    console.error(`❌ Spawn error: ${result.error.message}`);
+  }
   console.log(`Exit code: ${result.status ?? 1}`);
   return result.status ?? 1;
 }
@@ -218,22 +228,48 @@ function main() {
     printHelp();
     return;
   }
-  const attempts = Number(argv.attempts) || 1;
   const projectRoot = process.cwd();
   const env = argv.env || 'default';
   
-  // AUTO-DETECT RUNNER if not specified
+  const attemptsArg = argv.attempts ? Number(argv.attempts) : 1;
+  if (!Number.isInteger(attemptsArg) || attemptsArg < 1) {
+    console.error(`❌ ERROR: --attempts must be a positive integer (got: ${argv.attempts})`);
+    process.exit(1);
+  }
+  const attempts = attemptsArg;
+  
+  // AUTO-DETECT RUNNER if not specified (prefer most recent artifact)
   let runner = argv.runner;
   if (!runner) {
     const cucumberRerunFile = path.join(projectRoot, '@rerun.txt');
+    const playqFailedTestsJson = path.join(projectRoot, '.playq-failed-tests.json');
+    const playwrightRerunFile = path.join(projectRoot, '.playwright-rerun');
     const playwrightReportJson = path.join(projectRoot, 'test-results/playwright-report/playwright-report.json');
     
-    if (fs.existsSync(cucumberRerunFile)) {
+    // Get modification times to pick most recent artifact
+    const getModTime = (filePath: string): number => {
+      try {
+        return fs.statSync(filePath).mtimeMs;
+      } catch {
+        return 0;
+      }
+    };
+    
+    const cucumberTime = fs.existsSync(cucumberRerunFile) ? getModTime(cucumberRerunFile) : 0;
+    const playwrightJsonTime = fs.existsSync(playqFailedTestsJson) ? getModTime(playqFailedTestsJson) : 0;
+    const playwrightRerunTime = fs.existsSync(playwrightRerunFile) ? getModTime(playwrightRerunFile) : 0;
+    const reportJsonTime = fs.existsSync(playwrightReportJson) ? getModTime(playwrightReportJson) : 0;
+    
+    const maxPlaywrightTime = Math.max(playwrightJsonTime, playwrightRerunTime, reportJsonTime);
+    
+    if (cucumberTime > 0 && cucumberTime >= maxPlaywrightTime) {
       runner = 'cucumber';
       console.log('🔍 Auto-detected runner: cucumber (found @rerun.txt)');
-    } else if (fs.existsSync(playwrightReportJson)) {
+    } else if (maxPlaywrightTime > 0) {
       runner = 'playwright';
-      console.log('🔍 Auto-detected runner: playwright (found playwright-report.json)');
+      const source = playwrightJsonTime > 0 ? '.playq-failed-tests.json' :
+                     playwrightRerunTime > 0 ? '.playwright-rerun' : 'playwright-report.json';
+      console.log(`🔍 Auto-detected runner: playwright (found ${source})`);
     } else {
       runner = 'playwright'; // fallback
       console.log('⚠️  No rerun artifacts found, defaulting to playwright');
@@ -251,7 +287,17 @@ function main() {
       const filePaths = readLines(path.isAbsolute(fileArg) ? fileArg : path.join(projectRoot, fileArg));
       files = filePaths;
     } else {
+      // Try to read from HTML report (exists if merge-reports was run previously)
       files = getPlaywrightFailedFiles(projectRoot, folderArg);
+      
+      // Fallback: if no files found from report, try .playwright-rerun file (created after initial test run)
+      if (!files.length) {
+        const playwrightRerunPath = path.join(projectRoot, '.playwright-rerun');
+        if (fs.existsSync(playwrightRerunPath)) {
+          console.log('📋 HTML report not found, falling back to .playwright-rerun file');
+          files = readLines(playwrightRerunPath);
+        }
+      }
     }
     console.log(`📋 Detected ${files.length} failed test file(s):`);
     files.forEach(f => console.log(`   - ${f}`));
@@ -263,8 +309,29 @@ function main() {
     for (let i = 1; i <= attempts; i++) {
       console.log(`\n▶ Rerun attempt ${i}/${attempts} (Playwright)`);
       lastStatus = runPlaywrightGrep(projectRoot, files, env, project, i);
-      // Recompute failures for next iteration
+      
+      // If attempt passed (status 0), all tests are passing - we're done
+      if (lastStatus === 0) {
+        console.log('✅ All rerun tests passed.');
+        break;
+      }
+      
+      // Attempt failed, recompute failures for next iteration 
       files = getPlaywrightFailedFiles(projectRoot, folderArg);
+      
+      // Fallback if report generation failed (defensive: use .playwright-rerun)
+      if (!files.length && i < attempts) { // Only if more attempts remain
+        const playwrightRerunPath = path.join(projectRoot, '.playwright-rerun');
+        if (fs.existsSync(playwrightRerunPath)) {
+          const fallbackFiles = readLines(playwrightRerunPath);
+          if (fallbackFiles.length > 0) {
+            console.log('⚠️  HTML report unavailable, using .playwright-rerun fallback');
+            files = fallbackFiles;
+          }
+        }
+      }
+      
+      // If still no failures found or no more attempts, stop
       if (!files.length) {
         console.log('✅ All rerun tests passed.');
         break;
@@ -277,6 +344,12 @@ function main() {
     if (!fs.existsSync(absRerun)) {
       console.log(`Rerun file not found: ${absRerun}`);
       process.exit(1);
+    }
+    // Check if rerun file has content (not empty)
+    const rerunContent = readLines(absRerun);
+    if (rerunContent.length === 0) {
+      console.log('✅ No failed scenarios to rerun (empty rerun file).');
+      process.exit(0);
     }
     let lastStatus = 1;
     for (let i = 1; i <= attempts; i++) {

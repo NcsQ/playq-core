@@ -3,6 +3,11 @@
  * 1. Extract failed tests from initial run reports
  * 2. Rerun failed tests
  * 3. Merge all reports
+ * 
+ * NOTE: This module is currently UNUSED and reserved for future programmatic rerun orchestration.
+ * The active rerun workflow is implemented in src/scripts/rerun.ts (invoked via `npx playq rerun`).
+ * This code may be wired up in the future for more advanced rerun scenarios or can be removed
+ * if programmatic orchestration is not needed.
  */
 
 import fs from 'fs';
