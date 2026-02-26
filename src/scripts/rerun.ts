@@ -89,7 +89,15 @@ function runPlaywrightGrep(projectRoot: string, files: string[], env?: string, p
       // Remove old blob-report_full if exists
       removeDirSafe(blobReportFull);
       // Rename current blob-report to blob-report_full
-      fs.renameSync(blobReport, blobReportFull);
+      try {
+        fs.renameSync(blobReport, blobReportFull);
+      } catch (err) {
+        console.error(
+          `❌ Failed to preserve original blob reports by renaming "${blobReport}" to "${blobReportFull}".`,
+          err
+        );
+        throw err;
+      }
     }
     
     // Selective cleanup before rerun (preserve blob-report_full and blob-report_merge)

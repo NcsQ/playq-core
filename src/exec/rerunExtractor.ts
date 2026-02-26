@@ -108,7 +108,9 @@ export function extractFailedTestsFromJunit(junitFile: string): FailedTest[] {
           const parts = fullMessage.split(/\s+/);
           if (parts.length > 1) {
             const testName = parts.slice(1).join(' ');
-            console.log(`     [${idx + 1}] Test name: "${testName}"`);
+            if (process.env.PLAYQ_DEBUG === 'true') {
+              console.log(`     [${idx + 1}] Test name: "${testName}"`);
+            }
             failed.push({
               name: testName,
               type: 'playwright',
