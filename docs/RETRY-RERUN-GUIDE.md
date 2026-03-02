@@ -1,131 +1,99 @@
-# Test Retry & Rerun Guide
+# Quick Test Retry & Rerun Guide
 
-## Run Tests
-
+## 1. Run Tests
 ```bash
-npx playq test --runner playwright --env lambdatest
-npx playq test --runner cucumber --tags "@scenario_tag" --env lambdatest
-```
-Example:
-```bash
- npx playq test --grep "fill" --env default
-```
-## Rerun Failed Tests
+# Cucumber
+npx playq test --runner cucumber --tags "@smoke" --env default
 
-> **IMPORTANT:** Rerun requires a prior test execution that identified failed tests. Run initial tests first, then rerun.
-
-### Complete Workflow Example
-```bash
-# Step 1: Run initial tests (some may fail)
-npx playq test --runner cucumber --tags "@scenario_tag" --env lambdatest
-
-# Step 2: Automatically creates @rerun.txt with failed scenarios
-# Step 3: Rerun only the failed tests
-npx playq rerun --runner cucumber --env lambdatest
-
-# Step 4: View merged reports
-npx playq merge-reports --runner cucumber
+# Playwright  
+npx playq test --grep "TestName" --env default
 ```
 
-### Playwright
-```bash
-# Run initial tests
-npx playq test --grep "TestName"
+**Output:** `test-results/` folder with HTML report + artifacts (screenshots, videos, traces)
 
-# Rerun failed tests with up to 3 attempts
-npx playq rerun
-npx playq rerun --attempts 3
+---
+
+## 2. Rerun Failed Tests
+```bash
+# Same command for both Playwright & Cucumber
+npx playq test --rerun --env default
 ```
 
-### Cucumber
-```bash
-# Run initial tests (creates @rerun.txt if failures found)
-npx playq test --runner cucumber --tags "@scenario_tag"
+**What happens:**
+- Automatically detects failed tests from previous run
+- Runs only failed tests
+- Generates separate `-rerun` reports
 
-# Rerun failed scenarios (preserves original results for merging)
-npx playq rerun --runner cucumber
+---
 
-# With environment and custom attempts
-npx playq rerun --runner cucumber --env lambdatest --attempts 3
-
-# Manual rerun using raw cucumber-js (alternative - clears test-results)
-npx cucumber-js --config cucumber.js "@rerun.txt"
-```
-
-## Merge Reports
-
-### Playwright
+## 3. Merge Reports  
 ```bash
 npx playq merge-reports --open
-npx playwright show-report test-results/playwright-report
 ```
 
-### Cucumber
-```bash
-# Cucumber merge-reports prints a JSON summary to console (not HTML)
-npx playq merge-reports --runner cucumber
-```
+**Generates:**
+- `cucumber-report-combined.html` - Side-by-side comparison (original vs rerun)
+- Unified Playwright HTML report (all runs merged)
 
-### Viewing Cucumber HTML Reports
-Cucumber reports are generated during test execution. To view them:
-```bash
-# Windows PowerShell
-start test-results/cucumber-report.html
+---
 
-# macOS
-open test-results/cucumber-report.html
+## 4. View Artifacts (Screenshots & Videos)
 
-# Linux
-xdg-open test-results/cucumber-report.html
-```
+### In HTML Report
+Open `test-results/cucumber-report.html` in browser:
+- ✅ **Screenshots** - Embedded PNG images  
+- ✅ **Videos** - Embedded WebM videos
+- ✅ **Traces** - Clickable Playwright trace links
 
-## View All Reports
-
-```bash
-# Playwright report
-npx playwright show-report test-results/playwright-report
-
-# Cucumber report
-# Windows PowerShell
-start test-results/cucumber-report.html
-
-# macOS
-open test-results/cucumber-report.html
-
-# Linux
-xdg-open test-results/cucumber-report.html
-```
-
-## Clean Up
-
-```bash
-# Windows PowerShell
-Remove-Item -Recurse -Force test-results -ErrorAction SilentlyContinue
-
-# macOS and Linux (Bash/Zsh)
-rm -rf test-results
-
-# Cross-platform using Node.js
-node -e "require('fs').rmSync('test-results', { recursive: true, force: true })"
-```
-
-## Command Options
-
-| Command | Flags | Purpose |
-|---------|-------|---------|
-| `npx playq rerun` | `--attempts N` | Rerun attempts (default: 1) |
-| | `--env <name>` | Use specific environment |
-| | `--folder <path>` | Rerun specific folder (Playwright only) |
-| `npx playq merge-reports` | `--runner <type>` | `playwright` \| `cucumber` \| `all` |
-| | `--open` | Open report after merge |
-| `npx cucumber-js` | `@rerun.txt` | Rerun failed Cucumber scenarios |
-
-## Reports Location
-
+### In File System
 ```
 test-results/
-├── playwright-report/     # Playwright HTML & JSON
-├── cucumber-report.html   # Cucumber HTML
-├── artifacts/             # Screenshots, videos, traces
-└── blob-report/           # Blob data (for merging)
+├── cucumber-report.html          # Report with embedded artifacts
+├── scenarios/<scenario>_run1/    # Individual scenario artifacts  
+└── videos/                       # Test execution recordings
 ```
+
+---
+
+## Complete Workflow Example
+
+```bash
+# Step 1: Run initial tests
+npx playq test --runner cucumber --env default
+
+# Step 2: Rerun failed tests (if any failed)
+npx playq test --rerun --env default
+
+# Step 3: Merge and view combined report
+npx playq merge-reports --open
+```
+
+---
+
+## Configuration
+
+Customize artifact capture in `resources/config.ts`:
+
+```typescript
+artifacts: {
+  screenshot: true,        // Capture screenshots
+  video: true,             // Record videos
+  trace: true,             // Playwright traces
+  onFailureOnly: true,     // Only capture on failure
+  onSuccessOnly: false,    
+  cleanUpBeforeRun: false
+}
+```
+
+---
+
+## 📖 For Detailed Documentation
+
+See [COMPLETE-WORKFLOW-GUIDE.md](./COMPLETE-WORKFLOW-GUIDE.md) for:
+- Architecture details
+- Artifact embedding mechanics  
+- Playwright workflows
+- Troubleshooting guide
+- Best practices
+
+---
