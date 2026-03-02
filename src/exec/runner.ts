@@ -8,6 +8,170 @@ import { extractFailedTests, createCucumberRerunFile, createPlaywrightRerunFile 
 // Note: remove stray invalid import; runner does not need faker
 
 /**
+ * Check if user wants to rerun failed tests from previous run
+ * This happens when: npx playq test --rerun (no grep/tags)
+ * Allows manual rerun of failures without re-running entire suite
+ */
+function handleManualFailedTestRerun(): void {
+  // Only handle rerun if:
+  // 1. --rerun flag is set (PLAYQ_RERUN env var)
+  // 2. No new grep/tags specified (so we know to use failed test list)
+  if (process.env.PLAYQ_RERUN !== 'true') {
+    return; // Not a rerun attempt
+  }
+
+  if (process.env.PLAYQ_GREP || process.env.PLAYQ_TAGS) {
+    return; // User specified new grep/tags, so this is a normal run with rerun support, not a pure rerun
+  }
+
+  const projectRoot = process.cwd();
+  const failedTestsFile = path.join(projectRoot, '.playq-failed-tests.json');
+
+  if (!fs.existsSync(failedTestsFile)) {
+    console.log('❌ No previous failures found to rerun');
+    console.log('   Run tests first: npx playq test --grep "pattern"');
+    process.exit(1);
+  }
+
+  // Load and execute rerun
+  try {
+    const failedData = JSON.parse(fs.readFileSync(failedTestsFile, 'utf-8'));
+    console.log(`\n⏬ Rerunning ${failedData.count} failed test(s) from previous run\n`);
+
+    // PRESERVE BLOB REPORTS: Copy current blob-report to blob-report_full before rerun
+    // This ensures we have the original results for merging later
+    const testResultsDir = path.join(projectRoot, 'test-results');
+    const blobReportDir = path.join(testResultsDir, 'blob-report');
+    const blobReportFullDir = path.join(testResultsDir, 'blob-report_full');
+    
+    if (fs.existsSync(blobReportDir)) {
+      try {
+        // Remove old blob-report_full if it exists
+        if (fs.existsSync(blobReportFullDir)) {
+          fs.rmSync(blobReportFullDir, { recursive: true, force: true });
+        }
+        // Copy blob-report to blob-report_full
+        fs.cpSync(blobReportDir, blobReportFullDir, { recursive: true, force: true });
+        console.log('💾 Preserved original blob report → blob-report_full/');
+      } catch (err) {
+        console.warn('⚠️ Failed to preserve blob reports:', (err as any)?.message);
+      }
+    }
+
+    // Set marker so cleanup is skipped (preserve original results)
+    process.env.PLAYQ_IS_RERUN = 'true';
+    process.env.TEST_RUNNER = failedData.runner;
+    process.env.PLAYQ_RUNNER = failedData.runner;
+
+    if (failedData.runner === 'cucumber') {
+      rerunCucumberFailed();
+    } else {
+      rerunPlaywrightFailed(failedData.tests);
+    }
+  } catch (err) {
+    console.error('❌ Failed to parse failed tests file:', (err as any)?.message);
+    process.exit(1);
+  }
+}
+
+/**
+ * Rerun failed Cucumber tests
+ */
+function rerunCucumberFailed(): void {
+  const projectRoot = process.cwd();
+  const rerunFile = path.join(projectRoot, '@rerun.txt');
+
+  if (!fs.existsSync(rerunFile)) {
+    console.error('❌ Rerun file not found:', rerunFile);
+    process.exit(1);
+  }
+
+  process.env.PLAYQ_NO_INIT_VARS = '1';
+  loadEnv();
+  delete (process.env as any).PLAYQ_NO_INIT_VARS;
+
+  const cucumberArgs = [
+    'cucumber-js',
+    '--config', 'cucumber.js',
+    '--profile', 'default',
+    '@rerun.txt'
+  ];
+
+  console.log(`🎭 Rerunning Cucumber: npx ${cucumberArgs.join(' ')}\n`);
+
+  // Ensure env vars are set for the spawned process
+  const childEnv = { ...process.env };
+  childEnv.PLAYQ_IS_RERUN = 'true';  // Signal to preprocessing to use @rerun.txt only
+  childEnv.PLAYQ_PROJECT_ROOT = projectRoot;  // Ensure project root is known
+
+  const result = spawnSync('npx', cucumberArgs, {
+    stdio: 'inherit',
+    env: childEnv,
+    shell: true
+  });
+
+  const exitCode = result.status ?? 1;
+  console.log(`\n📊 Rerun completed with exit code: ${exitCode}`);
+  console.log(`💡 To merge reports, run: npx playq merge-reports --runner cucumber\n`);
+  saveFailedTestsIfAny(exitCode);
+}
+
+/**
+ * Rerun failed Playwright tests
+ */
+function rerunPlaywrightFailed(failedTests: any[]): void {
+  process.env.PLAYQ_NO_INIT_VARS = '1';
+  loadEnv();
+  delete (process.env as any).PLAYQ_NO_INIT_VARS;
+
+  // Build grep pattern from failed test names (identifier for pattern matching)
+  const patterns = failedTests
+    .filter((t: any) => typeof t === 'object' && (t.identifier || t.name))
+    .map((t: any) => (t.identifier || t.name || '').toString())
+    .filter((p: string) => p.trim().length > 0);
+
+  if (patterns.length === 0) {
+    console.error('❌ No test titles found in failed tests list');
+    process.exit(1);
+  }
+
+  // Escape special regex chars and join with OR operator
+  const grepPattern = patterns
+    .map((p: string) => p.replace(/[.+*?^${}()|[\]\\]/g, '\\$&'))
+    .join('|');
+
+  const command = `npx playwright test --config=playq/config/playwright/playwright.config.js --grep="${grepPattern}"${
+    process.env.PLAYQ_PROJECT ? ` --project="${process.env.PLAYQ_PROJECT}"` : ''
+  }`;
+
+  const childEnv = { ...process.env } as any;
+  childEnv.PLAYQ_IS_RERUN = 'true';
+  const preload = '-r ts-node/register';
+  childEnv.NODE_OPTIONS = childEnv.NODE_OPTIONS
+    ? `${childEnv.NODE_OPTIONS} ${preload}`
+    : preload;
+  if (!childEnv.PLAYQ_CORE_ROOT) childEnv.PLAYQ_CORE_ROOT = path.resolve(__dirname, '..');
+  if (!childEnv.PLAYQ_PROJECT_ROOT) childEnv.PLAYQ_PROJECT_ROOT = process.cwd();
+
+  const projectTsConfig = path.resolve(process.cwd(), 'tsconfig.json');
+  childEnv.TS_NODE_PROJECT = projectTsConfig;
+  childEnv.TS_NODE_TRANSPILE_ONLY = childEnv.TS_NODE_TRANSPILE_ONLY || 'true';
+
+  console.log(`🎭 Rerunning Playwright: ${command.substring(0, 80)}...\n`);
+
+  const result = spawnSync(command, {
+    stdio: 'inherit',
+    shell: true,
+    env: childEnv
+  });
+
+  const exitCode = result.status ?? 1;
+  console.log(`\n📊 Rerun completed with exit code: ${exitCode}`);
+  console.log(`💡 To merge reports, run: npx playq merge-reports --open\n`);
+  saveFailedTestsIfAny(exitCode);
+}
+
+/**
  * Clean up test-results directory before running tests
  */
 function cleanupTestResults(): void {
@@ -38,6 +202,9 @@ function cleanupTestResults(): void {
 // console.log('  - Runner (PLAYQ_PROJECT):', process.env.PLAYQ_PROJECT );
 // console.log('  - Env (RUNNER - cc_card_type):', process.env['cc_card_type']);
 // console.log('  - Env (RUNNER - config.testExecution.timeout):', process.env['config.testExecution.timeout'] );
+
+// Check if user wants to rerun previously failed tests
+handleManualFailedTestRerun();
 
 if (process.env.PLAYQ_RUNNER && process.env.PLAYQ_RUNNER === 'cucumber') {
   // Allow vars to initialize in the cucumber child process (do NOT set PLAYQ_NO_INIT_VARS here)
@@ -93,17 +260,9 @@ if (process.env.PLAYQ_RUNNER && process.env.PLAYQ_RUNNER === 'cucumber') {
   });
 
   run.on('close', (code, signal) => {
-    try {
-      const pkgPath = path.resolve(process.cwd(), 'package.json');
-      const pkg = require(pkgPath);
-      if (pkg.scripts && pkg.scripts['posttest:cucumber']) {
-        execSync('npm run posttest:cucumber', { stdio: 'inherit' });
-      } else {
-        console.log('ℹ️ Skipping posttest:cucumber (script not defined)');
-      }
-    } catch (err) {
-      console.log('ℹ️ Posttest check failed, continuing:', (err as any)?.message || err);
-    }
+    // Removed automatic posttest:cucumber call
+    // User should manually run: npx playq merge-reports
+    // This allows full control over when and how reports are merged
 
     // Convert code/signal to exit code: null code with signal is a failure
     const exitCode = code ?? (signal ? 1 : 0);
@@ -251,7 +410,8 @@ function saveFailedTestsIfAny(exitCode: number): void {
         console.log(`   Created ${playwrightRerunFile} (for direct playwright invocation)`);
       }
 
-      console.log(`   Run 'npx playq rerun' to rerun only failed tests\n`);
+      console.log(`   Run 'npx playq rerun' to rerun only failed tests`);
+      console.log(`\n💡 To merge reports, run: npx playq merge-reports\n`);
     } else if (fs.existsSync(failedTestsFile)) {
       // Clean up old failure file if all tests passed
       fs.unlinkSync(failedTestsFile);
@@ -261,6 +421,11 @@ function saveFailedTestsIfAny(exitCode: number): void {
       if (fs.existsSync(cucumberRerunFile)) fs.unlinkSync(cucumberRerunFile);
       if (fs.existsSync(playwrightRerunFile)) fs.unlinkSync(playwrightRerunFile);
       console.log('✅ All tests passed - removed old failure files');
+    }
+    
+    // Always show merge command reminder (for both pass and fail cases)
+    if (exitCode === 0) {
+      console.log(`\n💡 To merge/view reports, run: npx playq merge-reports --open\n`);
     }
   } catch (err) {
     console.log('⚠️ Could not save failed tests:', (err as any)?.message || err);

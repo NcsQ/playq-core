@@ -1,17 +1,27 @@
 import { loadEnv } from '../helper/bundle/env';
 import path from 'path';
-import { rmSync, existsSync, unlinkSync } from 'fs';
+import { rmSync, existsSync, unlinkSync, readdirSync } from 'fs';
 
 export function setupEnvironment() {
   loadEnv();
 
-  // Skip cleanup if this is a rerun (rerun.ts handles selective cleanup)
-  const isRerun = process.env.PLAYQ_IS_RERUN === 'true';
+  // Only skip cleanup during ACTIVE rerun phase (PLAYQ_IS_RERUN set by tryAutomaticRerun)
+  // Do NOT skip cleanup just because --rerun flag was used; the flag means "auto-rerun if failures"
+  // Normal cleanup happens before first run, then blob-reports are preserved before actual rerun
+  const isActiveRerun = process.env.PLAYQ_IS_RERUN === 'true';
   const projectRoot = process.env['PLAYQ_PROJECT_ROOT'] || process.cwd();
 
-  // If running a FRESH test (not a rerun), clear old rerun metadata files AND test-results
-  // This ensures rerun only contains the latest failed tests, not accumulated ones
-  if (!isRerun) {
+  // CRITICAL: Always log this to track environment variable propagation
+  console.log(`🔍 [pretest] Environment check: PLAYQ_IS_RERUN="${process.env.PLAYQ_IS_RERUN}" (type: ${typeof process.env.PLAYQ_IS_RERUN}), isActiveRerun=${isActiveRerun}`);
+  
+  // Debug logging
+  if (process.env.PLAYQ_DEBUG === 'true') {
+    console.log(`🔍 [pretest] Active rerun check: PLAYQ_IS_RERUN=${process.env.PLAYQ_IS_RERUN}, isActiveRerun=${isActiveRerun}`);
+  }
+
+  // If NOT an active rerun, clean old test-results and rerun metadata
+  // This ensures clean state for normal test runs and first run with --rerun
+  if (!isActiveRerun) {
     console.log('🧹 FRESH TEST RUN: Cleaning up old test results and failure metadata...');
     
     // STEP 1: Remove rerun metadata files
@@ -42,12 +52,34 @@ export function setupEnvironment() {
     try {
       const testResultsPath = path.resolve(projectRoot, 'test-results');
       if (existsSync(testResultsPath)) {
-        rmSync(testResultsPath, { recursive: true, force: true });
+        // Retry logic for Windows file locking issues
+        let retries = 5;
+        let deleted = false;
         
-        // Verify directory was actually deleted
-        if (!existsSync(testResultsPath)) {
-          console.log('  ✓ Removed: test-results/ (prevents old failure accumulation)');
-        } else {
+        while (retries > 0 && !deleted) {
+          try {
+            rmSync(testResultsPath, { recursive: true, force: true });
+            deleted = !existsSync(testResultsPath);
+            if (deleted) {
+              console.log('  ✓ Removed: test-results/ (prevents old failure accumulation)');
+              break;
+            }
+          } catch (err) {
+            retries--;
+            if (retries > 0) {
+              console.log(`  ⚠️  Retry cleanup (${retries} attempts left): ${(err as any)?.code}`);
+              // Wait 500ms before retrying
+              const startTime = Date.now();
+              while (Date.now() - startTime < 500) {
+                // Busy wait (can't use sleep in Node.js without async)
+              }
+            } else {
+              throw err;
+            }
+          }
+        }
+        
+        if (!deleted) {
           console.warn('⚠️  WARNING: test-results directory still exists after cleanup attempt!');
         }
       }
@@ -58,8 +90,20 @@ export function setupEnvironment() {
     
     console.log('✅ Cleanup complete - ready for fresh test run\n');
   } else {
-    // RERUN MODE: Clean test results directories so only rerun results appear
-    console.log('ℹ️  RERUN MODE: Cleaning test results for fresh rerun...');
+    // ACTIVE RERUN PHASE: Preserve blob-reports but clean other artifacts for fresh rerun
+    console.log('ℹ️  ACTIVE RERUN: Cleaning test-results artifacts, preserving blob-reports...');
+    console.log(`🔍 [pretest] About to preserve blob-reports. Current test-results contents:`);
+    try {
+      const testResultsPath = path.resolve(projectRoot, 'test-results');
+      if (existsSync(testResultsPath)) {
+        const items = readdirSync(testResultsPath);
+        items.forEach((item: string) => {
+          console.log(`   - ${item}`);
+        });
+      }
+    } catch (err) {
+      console.log('   (Could not list contents)');
+    }
     
     try {
       // Remove Allure results under test-results so merged report only shows rerun tests
@@ -83,11 +127,23 @@ export function setupEnvironment() {
         safeToRemove.forEach(sub => {
           const subPath = path.resolve(testResultsPath, sub);
           if (existsSync(subPath)) {
-            rmSync(subPath, { recursive: true, force: true });
+            try {
+              rmSync(subPath, { recursive: true, force: true });
+            } catch (err) {
+              // Silently skip files that are locked (Windows issue)
+              console.log(`  ⚠️  Could not remove ${sub} (file locked, skipping)`);
+            }
           }
         });
         // CRITICAL: Do NOT remove blob-report* folders - they're needed for merge
         console.log('  ✓ Cleaned test-results (preserved blob-report folders for merge)');
+        
+        // VERIFY blob-report folders still exist
+        console.log(`🔍 [pretest] After cleanup, test-results contents:`);
+        const itemsAfter = readdirSync(testResultsPath);
+        itemsAfter.forEach((item: string) => {
+          console.log(`   - ${item}`);
+        });
       }
     } catch (err) {
       console.warn('  ⚠️  Could not clean test-results:', err);
