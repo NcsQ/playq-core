@@ -76,6 +76,16 @@ if (process.argv[2] === 'generate' && (process.argv.includes('--stepgroup') || p
 }
 
 
+// If first argument is 'ps-template', run the psTemplate script
+if (process.argv[2] === 'ps-template') {
+  const { spawnSync } = require('child_process');
+  const psTemplateScript = path.join(__dirname, '../dist/scripts/psTemplate.js');
+  // Pass all remaining arguments to the psTemplate script
+  const result = spawnSync(process.execPath, [psTemplateScript, ...process.argv.slice(3)], { stdio: 'inherit' });
+  process.exit(result.status || 0);
+}
+
+
 // Only run test runner if 'test' subcommand is provided
 if (process.argv[2] === 'test') {
 
@@ -146,7 +156,7 @@ Examples:
 
 // Top-level help for all commands
 if (process.argv[2] === 'help' || process.argv[2] === '--help' || process.argv[2] === '-h' || !process.argv[2]) {
-  console.log(`PlayQ CLI (Phase 1)
+  console.log(`PlayQ CLI
 
 Usage: playq <command> [options]
   --help   | -h   Show help
@@ -155,10 +165,12 @@ Usage: playq <command> [options]
 Commands:
   test                 Run PlayQ tests (Playwright or Cucumber)
   util                 Run the PlayQ utility
+  ps-template          Process PowerShell script templates
   generate --stepgroup | -sg   Generate step group cache and step defs
 
 For test options, run: npx playq test --help
 For util options, run: npx playq util --help
+For ps-template options, run: npx playq ps-template --help
 For version, run: npx playq --version or npx playq -v
 
 Examples:
@@ -168,6 +180,8 @@ Examples:
   npx playq test --tags "@smoke" --runner cucumber
   npx playq util
   npx playq util --help
+  npx playq ps-template db_setup --run
+  npx playq ps-template db_setup --set ENV=production --run
   npx playq generate --stepgroup
   npx playq generate -sg
 `);

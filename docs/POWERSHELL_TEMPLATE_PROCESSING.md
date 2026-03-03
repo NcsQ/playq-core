@@ -1,131 +1,193 @@
-# PowerShell Template Processing
+# PowerShell Template Processing - User Guide
 
-Quick guide for running PowerShell scripts in your tests.
+Run PowerShell scripts automatically with variable substitution using **three methods**.
 
 ---
 
-## 3 Quick Steps
+## 📋 Quick Setup
 
-### 1️⃣ Create PowerShell Script Template
+### Step 1: Create Your PowerShell Template
 
-**Where:** `resources/powershell/my_script.ps1`
+**📁 PUT FILE HERE:** `resources/powershell/db_run_script.ps1`
 
 ```powershell
-Write-Host "Processing {{USER_NAME}}"
+Write-Host "Database Message: {{MESSAGE}}"
+Write-Host "User: {{USERNAME}}"
 Write-Host "Environment: {{ENVIRONMENT}}"
 ```
 
-Use `{{VARIABLE_NAME}}` for placeholders → variables auto-replaced.
+💡 **Tip:** Use `{{VARIABLE_NAME}}` for placeholders
 
 ---
 
-### 2️⃣ Define Variables
+### Step 2: Define Default Variables
 
-**Where:** `resources/var.static.json`
+**📁 PUT FILE HERE:** `resources/var.static.json`
 
 ```json
 {
-  "USER_NAME": "John Doe",
+  "MESSAGE": "Default database message",
+  "USERNAME": "testuser",
   "ENVIRONMENT": "staging"
 }
 ```
 
 ---
 
-### 3️⃣ Use in Feature File
+## ✅ Method 1: Terminal (CLI)
 
-**Where:** `tests/bdd/scenarios/Comms/my_test.feature`
+**Best for:** Quick testing, CI/CD pipelines, DevOps tasks
+
+### Basic Usage
+
+```bash
+# Just generate the script
+npx playq ps-template db_run_script
+
+# Generate and run immediately
+npx playq ps-template db_run_script --run
+
+# Override variables
+npx playq ps-template db_run_script --set USERNAME=admin --set ENVIRONMENT=prod --run
+
+# Preview (don't create file)
+npx playq ps-template db_run_script --dry-run
+```
+
+**📁 OUTPUT FILE:** `test-data/db_run_script_processed.ps1`
+
+---
+
+## ✅ Method 2: Feature Files (BDD)
+
+**Best for:** Test automation, team collaboration, documentation
+
+### Create Your Test
+
+**📁 PUT FILE HERE:** `tests/bdd/scenarios/Comms/database_test.feature`
 
 ```gherkin
-Scenario: Run PowerShell script
-  * Comm: Process PowerShell Template -templateName: "my_script" -options: "{\"run\": true}"
+Feature: PowerShell Database Scripts
+
+@powershell @database
+Scenario: Run database script
+  * Comm: Process PowerShell Template -templateName: "db_run_script" -options: "{\"run\": true}"
+
+@powershell @custom-vars
+Scenario: Run with custom variables
+  * Comm: Process PowerShell Template -templateName: "db_run_script" -options: "{\"overrides\": {\"USERNAME\": \"admin\", \"ENVIRONMENT\": \"production\"}, \"run\": true}"
 ```
 
-That's it! Script generates and runs.
+### Run Your Test
+
+```bash
+# Run all PowerShell tests
+npx playq test --runner cucumber --tags "@powershell" --env default
+
+# Run specific scenario
+npx playq test --runner cucumber --tags "@database" --env default
+```
+
+**📁 OUTPUT FILES:**
+- Generated script: `test-data/db_run_script_processed.ps1`
+- Test report: `test-results/cucumber-report.html`
 
 ---
 
-## The 3 Steps Explained
+## ✅ Method 3: Node.js Code (Programmatic)
 
-### Option 1: Generate Only (No Execution)
+**Best for:** Build automation, custom scripts, integration with existing code
 
-```gherkin
-* Comm: Process PowerShell Template -templateName: "my_script" -options: "{\"run\": false}"
-```
-→ Creates `test-data/my_script_processed.ps1` (doesn't run)
+### Create Your Script
 
----
+**📁 PUT FILE HERE:** `scripts/database-setup.js`
 
-### Option 2: Generate & Execute
+```javascript
+const { processPowerShellTemplate } = require('@playq/core/dist/helper/actions/commActions');
 
-```gherkin
-* Comm: Process PowerShell Template -templateName: "my_script" -options: "{\"run\": true}"
-```
-→ Creates file **and** runs it immediately
-
----
-
-### Option 3: Generate & Store Path (for later use)
-
-```gherkin
-* Comm: Process PowerShell Template -templateName: "my_script" and store output in -variable: "var.scriptPath" -options: "{\"run\": false}"
-* Comm: Run PowerShell Script -scriptPath: "#{var.scriptPath}" -options: "{}"
-```
-→ First step: generates file, saves path in variable  
-→ Second step: runs it using the stored path
-
----
-
-## File Locations
-
-```
-resources/powershell/          ← Your PowerShell templates (.ps1 files)
-test-data/                     ← Generated scripts (auto-created)
-resources/var.static.json      ← Your variables
-```
-
----
-
-## Example
-
-**Template:** `resources/powershell/setup_user.ps1`
-```powershell
-Write-Host "Creating user {{USERNAME}}"
-Write-Host "Role: {{USER_ROLE}}"
-```
-
-**Variables:** `resources/var.static.json`
-```json
-{
-  "USERNAME": "testuser",
-  "USER_ROLE": "Admin"
+async function setupDatabase() {
+  console.log('🚀 Starting database setup...');
+  
+  // Method 1: Run with defaults
+  await processPowerShellTemplate('db_run_script', { run: true });
+  
+  // Method 2: Override variables
+  await processPowerShellTemplate('db_run_script', {
+    run: true,
+    overrides: {
+      USERNAME: 'admin',
+      ENVIRONMENT: 'production'
+    }
+  });
+  
+  console.log('✅ Setup completed');
 }
+
+setupDatabase();
 ```
 
-**Feature:** `tests/bdd/scenarios/admin.feature`
-```gherkin
-Scenario: Create admin user
-  * Comm: Process PowerShell Template -templateName: "setup_user" -options: "{\"run\": true}"
+### Run Your Script
+
+```bash
+node scripts/database-setup.js
 ```
 
-**Result:** Script runs with `USERNAME=testuser` and `USER_ROLE=Admin`
+**📁 OUTPUT FILE:** `test-data/db_run_script_processed.ps1`
 
 ---
 
-## Override Variables in Feature
+## 📂 File Locations Summary
 
-Change values without editing JSON:
-
-```gherkin
-* Comm: Process PowerShell Template -templateName: "setup_user" -options: "{\"run\": true, \"overrides\": {\"USER_ROLE\": \"Editor\"}}"
-```
-→ Runs with `USER_ROLE=Editor` (overriding the JSON value)
+| Purpose | Location |
+|---------|----------|
+| **PowerShell templates** | `resources/powershell/*.ps1` |
+| **Default variables** | `resources/var.static.json` |
+| **Feature files (BDD)** | `tests/bdd/scenarios/*.feature` |
+| **Node scripts (optional)** | `scripts/*.js` |
+| **Generated scripts** ⬅️ OUTPUT | `test-data/*_processed.ps1` |
+| **Test reports** ⬅️ OUTPUT | `test-results/cucumber-report.html` |
 
 ---
 
-## That's All You Need! 
+## 🐛 Common Issues
 
-1. Create `.ps1` in `resources/powershell/`
-2. Add variables to `resources/var.static.json`
-3. Use the 3 steps in your feature file
-4. Run tests: `npx playq --runner cucumber`
+| Problem | Solution |
+|---------|----------|
+| `Template not found` | Check file exists: `resources/powershell/yourtemplate.ps1` |
+| `Variable not replaced` | Check variable name in `resources/var.static.json` |
+| `Permission denied` | Windows: `Set-ExecutionPolicy -ExecutionPolicy Bypass` |
+| `{{VAR}} appears in output` | Variable not found - check spelling in `var.static.json` |
+
+---
+
+## 💡 Quick Examples
+
+### Example 1: QA Tester
+```bash
+# 1. Create feature file: tests/bdd/scenarios/Comms/test.feature
+# 2. Run test:
+npx playq test --runner cucumber --tags "@powershell" --env default
+# 3. Check: test-results/cucumber-report.html
+```
+
+### Example 2: DevOps Engineer
+```bash
+# Quick one-liner for CI/CD
+npx playq ps-template deploy_script --set ENV=production --run
+```
+
+### Example 3: Developer
+```javascript
+// In your Node.js code
+const { processPowerShellTemplate } = require('@playq/core/dist/helper/actions/commActions');
+await processPowerShellTemplate('setup_script', { run: true });
+```
+
+---
+
+## ✅ That's It!
+
+Pick your method based on your needs:
+- **Terminal** → Fast, simple, one-off tasks
+- **Feature Files** → Team testing, documentation, repeatability
+- **Node.js Code** → Build automation, custom workflows
