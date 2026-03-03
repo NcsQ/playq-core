@@ -174,13 +174,24 @@ async function main() {
       process.exit(1);
     }
 
-    // Validate required output path
-    if (!result.outputPath || typeof result.outputPath !== 'string') {
-      console.error('❌ Template processor did not return a valid output path');
-      process.exit(1);
-    }
+    // Validate / derive output path
+    let outputPath: string;
 
-    const outputPath = result.outputPath;  // Now type-safe
+    if (!options.dryRun) {
+      // In non-dry-run mode we require a concrete output path from the processor
+      if (!result.outputPath || typeof result.outputPath !== 'string') {
+        console.error('❌ Template processor did not return a valid output path');
+        process.exit(1);
+      }
+      outputPath = result.outputPath;
+    } else {
+      // In dry-run mode the processor may compute the output path; derive a reasonable fallback
+      if (typeof result.outputPath === 'string' && result.outputPath) {
+        outputPath = result.outputPath;
+      } else {
+        outputPath = `${DEFAULT_DEST_DIR}/${templateName}_processed.ps1`;
+      }
+    }
 
     if (options.dryRun) {
       console.log(`\n🔍 DRY-RUN: Would create file at: ${outputPath}`);

@@ -3,8 +3,7 @@
  * Provides logging, storage, and utility functions for tests
  */
 
-import { vars, webFixture, logFixture } from '../../../global';
-import { parseLooseJson } from '../../bundle/vars';
+import { vars, webFixture } from '../../../global';
 import * as allure from 'allure-js-commons';
 
 function isPlaywrightRunner() {

@@ -4,6 +4,7 @@ import * as allure from 'allure-js-commons';
 import { vars, comm } from '../../../global';
 import * as crypto from '../../util/utilities/cryptoUtil';
 import { TOTPHelper } from '../../util/totp/totpHelper';
+import { spawnSync } from 'child_process';
 
 function isPlaywrightRunner() { return process.env.TEST_RUNNER === 'playwright'; }
 const __allureAny_comm: any = allure as any;
@@ -371,9 +372,23 @@ export async function processPowerShellTemplate(templateName: string, options?: 
     options_json = options || {};
   }
 
+  const projectRoot = process.env.PLAYQ_PROJECT_ROOT || process.cwd();
+  const source = options_json.source || 'resources/powershell';
+  const dest = options_json.dest || 'test-data';
+  
+  const sourceBase = path.resolve(projectRoot, source);
+  const destBase = path.resolve(projectRoot, dest);
+  
+  if (!sourceBase.startsWith(projectRoot + path.sep) && sourceBase !== projectRoot) {
+    throw new Error(`Source path must be within project root: ${sourceBase}`);
+  }
+  if (!destBase.startsWith(projectRoot + path.sep) && destBase !== projectRoot) {
+    throw new Error(`Destination path must be within project root: ${destBase}`);
+  }
+
   const processorOptions = {
-    source: options_json.source || 'resources/powershell',
-    dest: options_json.dest || 'test-data',
+    source: source,
+    dest: dest,
     overrides: options_json.overrides || {},
     run: options_json.run || false,
     dryRun: options_json.dryRun || false,
@@ -427,33 +442,38 @@ export async function processPowerShellTemplateAndStore(
  * Comm: Run PowerShell Script -scriptPath: "test-data/db_setup.ps1" -options: '{}'
  */
 export async function runPowerShellScript(scriptPath: string, options?: string | Record<string, any>): Promise<number> {
-  const { execSync } = require('child_process');
-
   if (!fs.existsSync(scriptPath)) {
     throw new Error(`PowerShell script not found: ${scriptPath}`);
   }
 
   try {
-    if (isPlaywrightRunner()) {
-      await __allureAny_comm.step(`Comm: Run PowerShell Script -scriptPath: ${scriptPath}`, async () => {
-        console.log(`🚀 Executing PowerShell script: ${scriptPath}`);
-        const result = execSync(`powershell -NoProfile -ExecutionPolicy Bypass -File "${scriptPath}"`, {
-          encoding: 'utf-8',
-          stdio: 'inherit',
-        });
-        console.log(result);
-        return 0;
-      });
-    } else {
+    const doExecute = async () => {
       console.log(`🚀 Executing PowerShell script: ${scriptPath}`);
-      const result = execSync(`powershell -NoProfile -ExecutionPolicy Bypass -File "${scriptPath}"`, {
+      const result = spawnSync('powershell', [
+        '-NoProfile',
+        '-ExecutionPolicy', 'Bypass',
+        '-File', scriptPath
+      ], {
         encoding: 'utf-8',
-        stdio: 'inherit',
+        stdio: 'inherit'
       });
-      console.log(result);
-    }
 
-    return 0;
+      if (result.error) {
+        throw result.error;
+      }
+
+      if (result.status !== 0) {
+        throw new Error(`PowerShell script exited with code ${result.status}`);
+      }
+
+      return 0;
+    };
+    
+    if (isPlaywrightRunner()) {
+      return await __allureAny_comm.step(`Comm: Run PowerShell Script -scriptPath: ${scriptPath}`, doExecute);
+    } else {
+      return await doExecute();
+    }
   } catch (error: any) {
     throw new Error(`PowerShell execution failed: ${error.message}`);
   }

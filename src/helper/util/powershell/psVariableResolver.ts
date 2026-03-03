@@ -1,7 +1,6 @@
 /**
  * PowerShell Template Variable Resolver
  * Resolves variables with priority: CLI > Static JSON > Environment Vars
- * Supports faker expressions: #{faker.custom.person.fullName()}
  */
 
 import * as fs from 'fs';
@@ -33,21 +32,22 @@ export class PsVariableResolver {
 
   /**
    * Resolve a single variable with priority: CLI > Static > Environment
+   * Uses explicit presence checks to allow empty string values
    */
   resolveVariable(varName: string, cliOverrides: Record<string, string> = {}): string | null {
     // Priority 1: CLI overrides
-    if (cliOverrides[varName]) {
+    if (Object.prototype.hasOwnProperty.call(cliOverrides, varName)) {
       return cliOverrides[varName];
     }
 
     // Priority 2: Static variables
-    if (this.staticVars[varName]) {
+    if (Object.prototype.hasOwnProperty.call(this.staticVars, varName)) {
       return this.staticVars[varName];
     }
 
     // Priority 3: Environment variables
-    if (process.env[varName]) {
-      return process.env[varName];
+    if (Object.prototype.hasOwnProperty.call(process.env, varName)) {
+      return process.env[varName] ?? null;
     }
 
     return null;
