@@ -148,7 +148,7 @@ export async function verifyPathValue(path: string, expected: string, options?: 
         if (assert) throw new Error(`Verification failed (partial_text): expected '${actual}' to include '${resolvedExpected}'`);
       } else {
         await comm.attachLog(`✅ Verification passed (partial_text): expected '${actual}' to include '${resolvedExpected}'`, "text/plain", "Verification Details");
-        console.assert(true, `✅ Verification passed (partial_text): expected '${actual}' to include '${resolvedExpected}'`);
+        console.log(`✅ Verification passed (partial_text): expected '${actual}' to include '${resolvedExpected}'`);
       }
       return;
     }
@@ -162,7 +162,7 @@ export async function verifyPathValue(path: string, expected: string, options?: 
       if (assert) throw new Error(`Verification failed: expected '${resolvedExpected}', but got '${actual}'`);
     } else {
       await comm.attachLog(`✅ Verification passed: expected: '${resolvedExpected}', actual: '${actual}'`, "text/plain", "Verification Details");
-      console.assert(true, `✅ Verification passed: expected: '${resolvedExpected}', actual: '${actual}'`);
+      console.log(`✅ Verification passed: expected: '${resolvedExpected}', actual: '${actual}'`);
     }
   }
 }

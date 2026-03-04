@@ -352,7 +352,7 @@ export async function wait(ms: number) {
  * @param templateName - Name of the template file (without .ps1 extension)
  * @param options - Optional string or object containing:
  *   - source: [string] Source directory for templates (default: 'resources/powershell')
- *   - dest: [string] Destination directory for processed files (default: './test-data')
+ *   - dest: [string] Destination directory for processed files (default: 'test-data')
  *   - overrides: [object] Variable overrides as key-value pairs
  *   - run: [boolean] Execute the script after processing (default: false)
  *   - dryRun: [boolean] Preview without creating file (default: false)

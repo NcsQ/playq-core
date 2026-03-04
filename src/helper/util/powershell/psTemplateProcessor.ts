@@ -95,11 +95,14 @@ export class PsTemplateProcessor {
    * Validate template name to prevent path traversal attacks
    */
   private validateTemplateName(templateName: string): void {
-    if (!templateName || typeof templateName !== 'string') {
+    if (!templateName || typeof templateName !== 'string' || templateName.trim() === '') {
       throw new Error('Template name must be a non-empty string');
     }
     if (templateName.includes('..') || templateName.includes('/') || templateName.includes('\\')) {
       throw new Error('Template name contains invalid characters (.. / \\)');
+    }
+    if (!/^[a-zA-Z0-9_-]+$/.test(templateName)) {
+      throw new Error('Template name contains invalid characters; only alphanumeric, underscore, and hyphen are allowed');
     }
   }
 
@@ -167,7 +170,7 @@ export class PsTemplateProcessor {
     for (const [varName, varValue] of Object.entries(vars)) {
       if (varValue === null) continue;
       const regex = new RegExp(`\\{\\{${varName}\\}\\}`, 'g');
-      processed = processed.replace(regex, varValue || '');
+      processed = processed.replace(regex, () => varValue || '');
     }
 
     return processed;

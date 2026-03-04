@@ -71,7 +71,7 @@ export async function storeValue(
   varName: string,
   options?: string | Record<string, any>
 ): Promise<void> {
-  if (!varName || typeof varName !== 'string') {
+  if (!varName || typeof varName !== 'string' || varName.trim() === '') {
     throw new Error('Variable name must be a non-empty string');
   }
 
