@@ -413,6 +413,38 @@ Given("Web: See Alert Text -expected: {param} -options: {param}", async function
   await webActions.seeAlertText(page, expected, options);
 });
 
+Given("Web: Click button and Accept Alert -field: {param} -options: {param}", async function (field, options) {
+  let page = webFixture.getCurrentPage();
+  await Promise.all([
+    webActions.acceptAlert(page, options),
+    webActions.clickButton(page, field, options),
+  ]);
+});
+
+Given("Web: Click button and Dismiss Alert -field: {param} -options: {param}", async function (field, options) {
+  let page = webFixture.getCurrentPage();
+  await Promise.all([
+    webActions.dismissAlert(page, options),
+    webActions.clickButton(page, field, options),
+  ]);
+});
+
+Given("Web: Click button and Fill Alert -field: {param} -text: {param} -options: {param}", async function (field, text, options) {
+  let page = webFixture.getCurrentPage();
+  await Promise.all([
+    webActions.fillAlert(page, text, options),
+    webActions.clickButton(page, field, options),
+  ]);
+});
+
+Given("Web: Click button and See Alert Text -field: {param} -expected: {param} -options: {param}", async function (field, expected, options) {
+  let page = webFixture.getCurrentPage();
+  await Promise.all([
+    webActions.seeAlertText(page, expected, options),
+    webActions.clickButton(page, field, options),
+  ]);
+});
+
 // downloadActions.ts
 Given("Web: List Files -dir: {param} -storeTo: {param}", async function (dir, varName) {
   const files = await webActions.listFiles(dir);
