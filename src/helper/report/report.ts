@@ -13,22 +13,22 @@ if (!fs.existsSync(jsonPath)) {
   const raw = fs.readFileSync(jsonPath, "utf-8");
   const data = JSON.parse(raw);
   data.forEach((feature: any) => {
-    if (feature.uri?.startsWith("_TEMP/execution/")) {
-      feature.uri = feature.uri.replace("_TEMP/execution/", "");
+    if (feature.uri?.startsWith("_Temp/execution/")) {
+      feature.uri = feature.uri.replace("_Temp/execution/", "");
     }
   });
   fs.writeFileSync(jsonPath, JSON.stringify(data, null, 2)); // Save the cleaned version
 }
 
-// Removing "_TEMP/execution/" from cucumber-report.html
+// Removing "_Temp/execution/" from cucumber-report.html
 const htmlReportPath = "test-results/cucumber-report.html";
 if (fs.existsSync(htmlReportPath)) {
   let html = fs.readFileSync(htmlReportPath, "utf-8");
   // Use split/join for wide Node compatibility (avoid String.replaceAll requirement)
-  const updatedHtml = html.split("_TEMP/execution/").join("");
+  const updatedHtml = html.split("_Temp/execution/").join("");
 
   fs.writeFileSync(htmlReportPath, updatedHtml, "utf-8");
-  console.log("🧼 Cleaned cucumber-report.html by removing '_TEMP/execution/'");
+  console.log("🧼 Cleaned cucumber-report.html by removing '_Temp/execution/'");
 } else {
   console.warn("⚠️ cucumber-report.html not found.");
 }
