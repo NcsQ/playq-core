@@ -4,6 +4,7 @@ import * as allure from 'allure-js-commons';
 import { vars, comm } from '../../../global';
 import * as crypto from '../../util/utilities/cryptoUtil';
 import { TOTPHelper } from '../../util/totp/totpHelper';
+import { spawnSync } from 'child_process';
 
 function isPlaywrightRunner() { return process.env.TEST_RUNNER === 'playwright'; }
 const __allureAny_comm: any = allure as any;
@@ -341,4 +342,139 @@ export async function generateTotpTokenToVariable(
  */
 export async function wait(ms: number) {
   await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Comm: Process PowerShell Template -templateName: {param} -options: {param}
+ *
+ * Processes a PowerShell template file by replacing variables and optionally executing it.
+ *
+ * @param templateName - Name of the template file (without .ps1 extension)
+ * @param options - Optional string or object containing:
+ *   - source: [string] Source directory for templates (default: 'resources/powershell')
+ *   - dest: [string] Destination directory for processed files (default: 'test-data')
+ *   - overrides: [object] Variable overrides as key-value pairs
+ *   - run: [boolean] Execute the script after processing (default: false)
+ *   - dryRun: [boolean] Preview without creating file (default: false)
+ *
+ * @example
+ * Comm: Process PowerShell Template -templateName: "db_setup" -options: '{"run": true}'
+ */
+export async function processPowerShellTemplate(templateName: string, options?: string | Record<string, any>): Promise<any> {
+  const { PsTemplateProcessor } = await import('../../util/powershell/psTemplateProcessor');
+  let options_json: any = {};
+
+  if (typeof options === 'string') {
+    // Unescape JSON string if it has escaped quotes
+    const unescapedOptions = options.replace(/\\"/g, '"');
+    options_json = vars.parseLooseJson(unescapedOptions);
+  } else {
+    options_json = options || {};
+  }
+
+  const projectRoot = process.env.PLAYQ_PROJECT_ROOT || process.cwd();
+  const source = options_json.source || 'resources/powershell';
+  const dest = options_json.dest || 'test-data';
+  
+  const sourceBase = path.resolve(projectRoot, source);
+  const destBase = path.resolve(projectRoot, dest);
+  
+  if (!sourceBase.startsWith(projectRoot + path.sep) && sourceBase !== projectRoot) {
+    throw new Error(`Source path must be within project root: ${sourceBase}`);
+  }
+  if (!destBase.startsWith(projectRoot + path.sep) && destBase !== projectRoot) {
+    throw new Error(`Destination path must be within project root: ${destBase}`);
+  }
+
+  const processorOptions = {
+    source: source,
+    dest: dest,
+    overrides: options_json.overrides || {},
+    run: options_json.run || false,
+    dryRun: options_json.dryRun || false,
+  };
+
+  const processor = new PsTemplateProcessor(processorOptions);
+  const result = await processor.process(templateName);
+
+  if (!result.success) {
+    throw new Error(`Failed to process template: ${result.error}`);
+  }
+
+  vars.setValue(`var.ps.lastOutput`, JSON.stringify(result));
+  return result;
+}
+
+/**
+ * Comm: Process PowerShell Template -templateName: {param} and store output in -variable: {param} -options: {param}
+ *
+ * Processes a PowerShell template and stores the output path in a variable.
+ *
+ * @param templateName - Name of the template file (without .ps1 extension)
+ * @param varName - Variable name to store the output file path
+ * @param options - Optional string or object (same as processPowerShellTemplate)
+ *
+ * @example
+ * Comm: Process PowerShell Template -templateName: "db_setup" and store output in -variable: "var.scriptPath" -options: '{}'
+ */
+export async function processPowerShellTemplateAndStore(
+  templateName: string,
+  varName: string,
+  options?: string | Record<string, any>
+): Promise<void> {
+  const result = await processPowerShellTemplate(templateName, options);
+  if (result.success && result.outputPath) {
+    vars.setValue(varName, result.outputPath);
+  } else {
+    throw new Error(`Failed to process PowerShell template: ${result.error}`);
+  }
+}
+
+/**
+ * Comm: Run PowerShell Script -scriptPath: {param} -options: {param}
+ *
+ * Executes a PowerShell script file.
+ *
+ * @param scriptPath - Path to the PowerShell script file
+ * @param options - Optional string or object (currently unused, reserved for future)
+ *
+ * @example
+ * Comm: Run PowerShell Script -scriptPath: "test-data/db_setup.ps1" -options: '{}'
+ */
+export async function runPowerShellScript(scriptPath: string, options?: string | Record<string, any>): Promise<number> {
+  if (!fs.existsSync(scriptPath)) {
+    throw new Error(`PowerShell script not found: ${scriptPath}`);
+  }
+
+  try {
+    const doExecute = async () => {
+      console.log(`🚀 Executing PowerShell script: ${scriptPath}`);
+      const result = spawnSync('powershell', [
+        '-NoProfile',
+        '-ExecutionPolicy', 'Bypass',
+        '-File', scriptPath
+      ], {
+        encoding: 'utf-8',
+        stdio: 'inherit'
+      });
+
+      if (result.error) {
+        throw result.error;
+      }
+
+      if (result.status !== 0) {
+        throw new Error(`PowerShell script exited with code ${result.status}`);
+      }
+
+      return 0;
+    };
+    
+    if (isPlaywrightRunner()) {
+      return await __allureAny_comm.step(`Comm: Run PowerShell Script -scriptPath: ${scriptPath}`, doExecute);
+    } else {
+      return await doExecute();
+    }
+  } catch (error: any) {
+    throw new Error(`PowerShell execution failed: ${error.message}`);
+  }
 }

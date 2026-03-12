@@ -1,9 +1,18 @@
-import { vars, webFixture, logFixture } from "../../../global";
-import { parseLooseJson } from '../../bundle/vars';
-import * as allure from "allure-js-commons";
+/**
+ * Common communication actions
+ * Provides logging, storage, and utility functions for tests
+ */
 
-function isPlaywrightRunner() { return process.env.TEST_RUNNER === 'playwright'; }
-function isCucumberRunner() { return process.env.TEST_RUNNER === 'cucumber'; }
+import { vars, webFixture } from '../../../global';
+import * as allure from 'allure-js-commons';
+
+function isPlaywrightRunner() {
+  return process.env.TEST_RUNNER === 'playwright';
+}
+
+function isCucumberRunner() {
+  return process.env.TEST_RUNNER === 'cucumber';
+}
 
 const __allureAny_comm: any = allure as any;
 if (typeof __allureAny_comm.step !== 'function') {
@@ -12,7 +21,7 @@ if (typeof __allureAny_comm.step !== 'function') {
 
 /**
  * Comm: Comment -text: {param}
- * 
+ *
  * Logs a comment with variable substitution to the console.
  * Useful for adding contextual information to the test log.
  *
@@ -25,21 +34,19 @@ if (typeof __allureAny_comm.step !== 'function') {
  * @example
  * Comm: Comment -text: "LAMBDA TEST COMPLETE"
  */
-export async function comment(message: string) {
-  if (typeof message !== 'string' || message.trim().length === 0) {
-    throw new Error('❌ comment: message must be a non-empty string.');
+export async function comment(message: string): Promise<void> {
+  if (typeof message !== 'string' || message.trim() === '') {
+    throw new Error('Message must be a non-empty string');
   }
-  const formattedMessage = vars.replaceVariables(message);
+
+  const resolved = vars.replaceVariables(message);
 
   if (isPlaywrightRunner()) {
-    await __allureAny_comm.step(
-      `Comm: Comment -text: ${formattedMessage}`,
-      async () => {
-        console.log(`💬 Comment: ${formattedMessage}`);
-      }
-    );
+    await __allureAny_comm.step(`Comm: Comment -text: "${resolved}"`, async () => {
+      console.log(`📝 Comment: ${resolved}`);
+    });
   } else {
-    console.log(`💬 Comment: ${formattedMessage}`);
+    console.log(`📝 Comment: ${resolved}`);
   }
 }
 
@@ -59,31 +66,37 @@ export async function comment(message: string) {
  * @example
  * Store -value: "${faker.string.alphanumeric({length:4})}" in -variable: "var.centre.code" -options: ""
  */
-export async function storeValue(value: string, varName: string, options?: string | Record<string, any>) {
-  const options_json = typeof options === 'string' ? parseLooseJson(options) : (options || {});
-  if (typeof varName !== 'string' || varName.trim().length === 0) {
-    throw new Error('❌ storeValue: varName must be a non-empty string.');
+export async function storeValue(
+  value: string,
+  varName: string,
+  options?: string | Record<string, any>
+): Promise<void> {
+  if (!varName || typeof varName !== 'string' || varName.trim() === '') {
+    throw new Error('Variable name must be a non-empty string');
   }
+
   if (value === undefined || value === null) {
-    throw new Error('❌ storeValue: value must be provided.');
+    throw new Error('Value cannot be undefined or null');
   }
-  const resolvedValue = vars.replaceVariables(value);
+
+  const resolvedValue = vars.replaceVariables(String(value));
+  vars.setValue(varName, resolvedValue);
 
   if (isPlaywrightRunner()) {
     await __allureAny_comm.step(
-      `Comm: Store -value: ${resolvedValue} in -variable: ${varName} -options: ${JSON.stringify(options_json)}`,
+      `Comm: Store -value: "***" in -variable: ${varName}`,
       async () => {
-        vars.setValue(varName, resolvedValue);
+        console.log(`💾 Stored: ${varName} = ${resolvedValue}`);
       }
     );
   } else {
-    vars.setValue(varName, resolvedValue);
+    console.log(`💾 Stored: ${varName} = ${resolvedValue}`);
   }
 }
 
 /**
  * Comm: Attach-Log -message: {param} -mimeType: {param} -msgType: {param}
- * 
+ *
  * Attach log or message to the test context (Cucumber or Playwright runner).
  * @param message The message or buffer to attach
  * @param mimeType The mime type (default: text/plain)
@@ -95,47 +108,46 @@ export async function attachLog(
   message: string | Buffer,
   mimeType?: string,
   msgType?: string
-
-) {
-  if (message === undefined || message === null || (typeof message === 'string' && message.length === 0)) {
-    console.warn('⚠️ attachLog: empty message provided; skipping attachment');
+): Promise<void> {
+  if (!message || (typeof message === 'string' && message.trim() === '')) {
+    console.warn('⚠️ Message is empty. Skipping attachment.');
     return;
   }
-  if (!mimeType) mimeType = "text/plain";
-  if (!msgType) msgType = "Log";
 
+  const type = msgType || 'Log';
+  const mime = mimeType || 'text/plain';
 
-  if (isCucumberRunner()) {
-    const world = webFixture.getWorld();
-    if (world?.attach) {
-      await world.attach(message, mimeType);
-    } else {
-      console.warn("⚠️ No World.attach() available in Cucumber context");
-    }
-  } else if (isPlaywrightRunner()) {
-    try {
+  try {
+    if (isPlaywrightRunner()) {
+      // Use allure for Playwright
       const anyAllure: any = allure as any;
       if (typeof anyAllure.attachment === 'function') {
-        anyAllure.attachment(msgType, message, mimeType);
+        anyAllure.attachment(type, message, mime);
       } else if (typeof anyAllure.attach === 'function') {
-        anyAllure.attach(msgType || 'Log', message, mimeType);
+        anyAllure.attach(type, message, mime);
       } else {
-        if (typeof message === 'string') console.log(message);
+        console.log(`📎 [${type}] ${message}`);
       }
-    } catch {
-      if (typeof message === 'string') console.log(message);
+    } else if (isCucumberRunner()) {
+      // Use world.attach for Cucumber
+      const world = webFixture.getWorld();
+      if (world?.attach) {
+        const buffer = typeof message === 'string' ? Buffer.from(message) : message;
+        await world.attach(buffer, mime);
+      } else {
+        console.log(`📎 [${type}] ${message}`);
+      }
+    } else {
+      console.log(`📎 [${type}] ${message}`);
     }
-    // await playwrightTest
-    //   .info()
-    //   .attach("Log", { body: message, contentType: mimeType });
-  } else {
-    console.warn("⚠️ attachLog: Unknown runner type");
+  } catch (error) {
+    console.warn(`⚠️ Could not attach log: ${error}`);
   }
 }
 
 /**
  * Comm: Wait-In-Milli-Seconds -seconds: {param}
- * 
+ *
  * Pauses execution for a given number of milliseconds.
  * Logs a message using the test logger if available.
  *
@@ -146,20 +158,18 @@ export async function attachLog(
  * @example
  * Comm: Wait-In-Milli-Seconds -seconds: "1000"
  */
-export async function waitInMilliSeconds(ms: number) {
-  if (typeof ms !== 'number' || !isFinite(ms) || ms < 0) {
-    throw new Error('❌ waitInMilliSeconds: ms must be a non-negative number.');
+export async function waitInMilliSeconds(ms: number): Promise<void> {
+  if (!Number.isFinite(ms) || ms < 0) {
+    throw new Error('Wait duration must be a non-negative finite number');
   }
-  const logger = logFixture.getLogger?.();
-  const doWait = async () => {
-    logger?.info?.(`⏳ Waiting for ${ms} ms`);
-    await new Promise((resolve) => setTimeout(resolve, ms));
-  };
+
   if (isPlaywrightRunner()) {
     await __allureAny_comm.step(`Comm: Wait-In-Milli-Seconds -seconds: ${ms}`, async () => {
-      await doWait();
+      console.log(`⏱️ Waiting ${ms}ms...`);
+      await new Promise((resolve) => setTimeout(resolve, ms));
     });
   } else {
-    await doWait();
+    console.log(`⏱️ Waiting ${ms}ms...`);
+    await new Promise((resolve) => setTimeout(resolve, ms));
   }
 }
