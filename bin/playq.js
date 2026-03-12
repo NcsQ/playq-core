@@ -86,13 +86,47 @@ if (process.argv[2] === 'ps-template') {
 }
 
 
+// Handle 'merge-reports' command - merges Playwright blob reports into unified HTML
+if (process.argv[2] === 'merge-reports') {
+  const { spawnSync } = require('child_process');
+  const mergeScript = path.join(__dirname, '../dist/scripts/merge-reports.js');
+  const result = spawnSync(process.execPath, [mergeScript, ...process.argv.slice(3)], { stdio: 'inherit' });
+  process.exit(result.status || 0);
+}
+
 // Only run test runner if 'test' subcommand is provided
 if (process.argv[2] === 'test') {
 
+  // DEBUG: Show raw process.argv
+  if (process.env.PLAYQ_DEBUG === 'true') {
+    console.log(`🔍 RAW process.argv from shell: ${JSON.stringify(process.argv)}`);
+  }
+
   const args = minimist(process.argv.slice(3), {
     string: ['grep', 'tags', 'runner', 'project', 'env', 'filter', 'key'],
+    boolean: ['rerun'],
     alias: { g: 'grep', t: 'tags', r: 'runner', p: 'project', e: 'env', f: 'filter', k: 'key' }
   });
+
+  // DEBUG: Log what minimist parsed
+  if (process.env.PLAYQ_DEBUG === 'true') {
+    console.log(`🔍 CLI parsed: tags="${args.tags}", grep="${args.grep}", runner="${args.runner}", rerun="${args.rerun}"`);
+  }
+
+  // Detect and help with PowerShell @-symbol issue
+  if ((args.tags === '' || args.tags === true) && !args._[0]) {
+    const tagValue = process.argv.slice(3).find((v, i, arr) => i > 0 && arr[i-1] === '--tags' && !v.startsWith('-'));
+    if (!tagValue) {
+      console.warn(`⚠️  WARNING: --tags flag found but no value provided or lost in shell parsing.`);
+      console.warn(`    If using PowerShell with @-symbol, try quoting it: --tags '@tag_name'`);
+    }
+  }
+
+  // Validate conflicting flags
+  if (args.grep && args.tags) {
+    console.warn(`⚠️  WARNING: Both --grep and --tags specified. Using --tags (Cucumber).`);
+    console.warn(`   If you intended Playwright mode, use --grep without --tags.`);
+  }
 
   // Support --key or -k for PLAYQ_SECRET_KEY
   if (args.key) process.env.PLAYQ_SECRET_KEY = args.key;
@@ -104,6 +138,8 @@ if (process.argv[2] === 'test') {
   if (args.runner) process.env.TEST_RUNNER = args.runner;
   if (args.project) process.env.PLAYQ_PROJECT = args.project;
   if (args.env) process.env.PLAYQ_ENV = args.env;
+  // Support --rerun flag to rerun failed tests (manual reruns, without automatic merge)
+  if (args.rerun) process.env.PLAYQ_RERUN = 'true';
 
   // --filter support: map to grep/tags based on runner
   if (args.filter) {
@@ -127,18 +163,19 @@ if (process.argv[2] === 'test') {
 
   // Provide basic help for test subcommand
   if (args.help || args.h) {
-    console.log(`PlayQ CLI (Phase 1)
+    console.log(`PlayQ CLI
 Usage: playq test [options]
-  --grep   | -g   Playwright grep filter
-  --tags   | -t   Cucumber tag expression
-  --filter | -f   Universal filter (maps to grep/tags by runner)
-  --runner | -r   playwright | cucumber (default playwright)
-  --project| -p   Playwright project name
-  --env    | -e   Environment name (mapped to PLAYQ_ENV)
-  --key    | -k   Secret key for crypto (sets PLAYQ_SECRET_KEY)
+  --grep        | -g   Playwright grep filter
+  --tags        | -t   Cucumber tag expression
+  --filter      | -f   Universal filter (maps to grep/tags by runner)
+  --runner      | -r   playwright | cucumber (default playwright)
+  --project     | -p   Playwright project name
+  --env         | -e   Environment name (mapped to PLAYQ_ENV)
+  --key         | -k   Secret key for crypto (sets PLAYQ_SECRET_KEY)
+  --rerun            Rerun failed tests from previous run (manual rerun only)
 
-  --help   | -h   Show help
-  --version| -v   Show PlayQ CLI version  
+  --help        | -h   Show help
+  --version     | -v   Show PlayQ CLI version  
 
 Examples:
   npx playq test --filter "Registration001"
@@ -146,7 +183,10 @@ Examples:
   npx playq test --grep "Registration001"
   npx playq test --tags "@smoke" --runner cucumber
   npx playq test --key "mysecret" --grep "Registration001"
-`);
+  npx playq test --rerun
+  npx playq test --rerun --env staging
+  npx playq merge-reports --open
+`)
     process.exit(0);
   }
 
@@ -164,26 +204,38 @@ Usage: playq <command> [options]
 
 Commands:
   test                 Run PlayQ tests (Playwright or Cucumber)
+                       Tests save failures automatically for manual rerun
+  merge-reports        Merge test reports into unified HTML (manual, after test run)
   util                 Run the PlayQ utility
   ps-template          Process PowerShell script templates
   generate --stepgroup | -sg   Generate step group cache and step defs
 
 For test options, run: npx playq test --help
+For merge-reports options, run: npx playq merge-reports --help
 For util options, run: npx playq util --help
 For ps-template options, run: npx playq ps-template --help
 For version, run: npx playq --version or npx playq -v
+
+RECOMMENDED WORKFLOW:
+  1. Run tests:        npx playq test --grep "login"
+  2. Review failures:  Check .playq-failed-tests.json
+  3. Manually rerun:   npx playq test --rerun
+  4. Merge reports:    npx playq merge-reports --open
 
 Examples:
   npx playq test --filter "Registration001"
   npx playq test --filter "@smoke" --runner cucumber
   npx playq test --grep "Registration001"
   npx playq test --tags "@smoke" --runner cucumber
+  npx playq test --rerun
+  npx playq test --rerun --env staging
+  npx playq merge-reports --open
   npx playq util
   npx playq util --help
   npx playq ps-template db_setup --run
   npx playq ps-template db_setup --set ENV=production --run
   npx playq generate --stepgroup
   npx playq generate -sg
-`);
+`)
   process.exit(0);
 }
