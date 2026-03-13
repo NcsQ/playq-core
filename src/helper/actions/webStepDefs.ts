@@ -235,9 +235,26 @@ Given("Web: Drag and Drop -source: {param} -target: {param} -options: {param}", 
 });
 
 // cookieActions.ts
-Given("Web: Set Cookie -name: {param} -value: {param}", async function (name, value) {
+Given(/^Web: Set Cookie -name: (.+?) -value: (.+?)(?: -options: (.+))?$/, async function (name, value, options) {
   let page = webFixture.getCurrentPage();
-  await webActions.setCookie(page, name, value);
+  const normalizeQuoted = (input: any) => {
+    if (typeof input !== 'string') return input;
+    const trimmed = input.trim();
+    const isWrappedDouble = trimmed.startsWith('"') && trimmed.endsWith('"');
+    const isWrappedSingle = trimmed.startsWith("'") && trimmed.endsWith("'");
+    return (isWrappedDouble || isWrappedSingle) ? trimmed.slice(1, -1) : trimmed;
+  };
+
+  const normalizedName = normalizeQuoted(name);
+  const normalizedValue = normalizeQuoted(value);
+  const normalizedOptions = normalizeQuoted(options);
+
+  await webActions.setCookie(page, normalizedName, normalizedValue, normalizedOptions);
+});
+
+Given("Web: Get Cookie -name: {param} -options: {param}", async function (name, options) {
+  let page = webFixture.getCurrentPage();
+  const val = await webActions.getCookie(page, name, options);
 });
 
 Given("Web: Get Cookie -name: {param} -storeTo: {param}", async function (name, varName) {
