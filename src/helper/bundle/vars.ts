@@ -283,9 +283,13 @@ function parseLooseJson(str: string): Record<string, any> {
       return `${p1}__LOCATOR_PLACEHOLDER_${locatorPlaceholders.length - 1}__`;
     });
 
+    // Convert single-quoted values to double-quoted
     maskedStr = maskedStr.replace(/:\s*'((?:[^']|\\')*)'/g, (match, p1) => {
       return `: "${p1}"`;
     });
+
+    // Convert single-quoted keys to double-quoted keys: 'key' -> "key"
+    maskedStr = maskedStr.replace(/([{,]\s*)'([a-zA-Z0-9_]+)'\s*:/g, '$1"$2":');
 
     let normalized = maskedStr
       .replace(/([{,]\s*)([a-zA-Z0-9_]+)\s*:/g, '$1"$2":')
